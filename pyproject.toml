@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "crawler"
+version = "0.1.0"
+description = "API Crawler for Metasys"
+authors = ["Per Buer <per.buer@gmail.com>"]
+license = "Apache-2.0"
+readme = "README.md"
+
+
+[tool.poetry.dependencies]
+python = "^3.8"
+click = "^7.1.2"
+requests = "^2.24.0"
+psycopg2 = "^2.8.6"
+sqlalchemy = "^1.3.20"
+python-dateutil = "^2.8.1"
+
+[tool.poetry.dev-dependencies]
+python-dotenv = "^0.14.0"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
+
+[tool.poetry.scripts]
+crawler = "src.crawler.crawler:cli"
