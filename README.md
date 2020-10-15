@@ -35,7 +35,7 @@ poetry run crawler createdb
 
 The crawler runs in two phases. First it collects the list of objects.
 ```
-poetry run crawler object
+poetry run crawler objects
 ```
 
 Once it completes you can run the more intrusive crawl:
@@ -46,4 +46,9 @@ poetry run crawler deep
 If you wanna reset the database:
 ```
 poetry run crawler flush
+```
+
+### Help?
+```shell script
+poetry run crawler --help
 ```
