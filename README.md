@@ -12,9 +12,11 @@ by the API so we build a tfm2rec API.
 ## Installation
 
 This is Python 3 cli application. It uses [Poetry](https://python-poetry.org/) to managed dependencies and runtime.
+Please make sure you have poetry installed at this point.
 
 ```shell script
 git clone ..
+cd entraos-metasys-crawler-cli
 poetry install
 ```
 
