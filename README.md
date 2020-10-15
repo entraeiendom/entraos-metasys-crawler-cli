@@ -24,7 +24,7 @@ Create a .env file containing the following:
  * BASEURL - Base URL to the Metasys API, ie http://192.168.63.21/api/v2 or similar
  * USERNAME
  * PASSWORD
- * DSN - Database connection string
+ * DSN - Database connection string, "postgresql://crawler@localhost:/postgres", this is a [libpq](https://www.postgresql.org/docs/11/libpq-connect.html) connection string, not a psycopg2 key/value DSN.
  
 Now you can have the crawler create the tables it needs:
 ```shell script
