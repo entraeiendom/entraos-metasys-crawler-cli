@@ -5,6 +5,7 @@ description = "API Crawler for Metasys"
 authors = ["Per Buer <per.buer@gmail.com>"]
 license = "Apache-2.0"
 readme = "README.md"
+repository = "https://github.com/entraeiendom/entraos-metasys-crawler-cli"
 
 
 [tool.poetry.dependencies]
