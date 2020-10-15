@@ -26,8 +26,21 @@ Create a .env file containing the following:
  * BASEURL - Base URL to the Metasys API, ie http://192.168.63.21/api/v2 or similar
  * USERNAME
  * PASSWORD
- * DSN - Database connection string, "postgresql://crawler@localhost:/postgres", this is a [libpq](https://www.postgresql.org/docs/11/libpq-connect.html) connection string, not a psycopg2 key/value DSN.
+ * DSN - Database connection string, "postgresql://crawler:test4crawl@localhost:5432/metasys_crawler", this is a [libpq](https://www.postgresql.org/docs/11/libpq-connect.html) connection string, not a psycopg2 key/value DSN.
+
+### Setup Postgresql
+ * [Postgresql initial setup[(https://docs.boundlessgeo.com/suite/1.1.1/dataadmin/pgGettingStarted/firstconnect.html)
+
+### Create user and database
  
+```
+sudo -u postgres psql postgres
+CREATE USER crawler with password 'test4crawl';
+CREATE DATABASE metasys_crawler;
+GRANT ALL PRIVILEGES ON DATABASE metasys_crawler TO crawler;
+\q
+```
+
 Now you can have the crawler create the tables it needs:
 ```shell script
 poetry run crawler createdb
