@@ -22,6 +22,7 @@ __version__ = '0.1.0'
 # Try to load .env. Ignore failures - .env might not be present in production if running in, say, Docker
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
     print('.env loaded')
 except ModuleNotFoundError:
@@ -47,11 +48,13 @@ def get_uuid_from_url(url: str) -> str:
 def insert_item_from_list(session, item, object_type):
     """ Insert an item into the database if it doesn't exists. """
     obj_id = item["id"]
-    logging.info(f"Considering item with UUID {obj_id}")
 
     existing_item = MetasysObject(id=obj_id)
     if existing_item:
+        logging.info(f"Ignoring {obj_id}")
         return
+
+    logging.info(f"Inserting {obj_id}")
     session.add(MetasysObject(id=obj_id,
                               parentId=get_uuid_from_url(item["parentUrl"]),
                               itemReference=item["itemReference"],
@@ -67,16 +70,42 @@ def get_objects(base_url: str, bearer: BearerToken, object_type: int):
     page = 1
     while True:
         resp = requests.get(base_url + f"/objects?type={object_type}&page={page}&pageSize=100&sort=name", auth=bearer)
-        logging.info(f"Got a page ({page}) of objects....")
         json = resp.json()
         items = json["items"]
-        if len(items) == 0:
+        logging.info(f"Working on page ({page} - {len(items)} items")
+        if json["next"] is None:  # the last page has a none link to next.
             break
         for item in json["items"]:
             insert_item_from_list(session, item, object_type)
+        logging.info(f"Page({page}) complete.")
         page = page + 1
         time.sleep(1)
 
+
+def enrich_single_object(base_url: str, bearer: BearerToken, object: MetasysObject):
+    try:
+        resp = requests.get(base_url + f"/objects/{object.id}", auth=bearer)
+        object.lastCrawl = datetime.now(timezone.utc)
+        object.response = resp.text
+        object.successes += 1
+    except Exception as e:
+        object.lastError = datetime.now(timezone.utc)
+        object.errors += 1
+
+
+def enrich_objects(base_url: str, bearer: BearerToken, item_prefix: str):
+    session = db_session()
+    objects = session.query(MetasysObject).filter(MetasysObject.itemReference.like(item_prefix + '%')).all()
+    print(f"Will crawl {len(objects)} objects...")
+    for object in objects:
+        print(f"Enriching object {object.id}")
+        enrich_single_object(base_url, bearer, object)
+        session.commit()  # Commit after each object. Implicit bail out.
+        time.sleep(2)
+
+#
+# Click setup below
+#
 
 @click.group()
 def cli():
@@ -103,15 +132,25 @@ def flush():
 
 
 @cli.command()
-@click.option('--object-type', default=165, type=click.STRING)
+@click.option('--object-type', default=165, type=click.INT)
 def objects(object_type):
     base_url = os.getenv('BASEURL')
     username = os.getenv('USERNAME')
     password = os.getenv('PASSWORD')
     logging.info(f"Crawling objects with type {type}")
-    logging.info("Getting a token")
     bearer = BearerToken(base_url, username, password)
     get_objects(base_url, bearer, object_type)
+
+
+@cli.command()
+@click.option('--item-prefix', type=click.STRING)
+def deep(item_prefix):
+    base_url = os.getenv('BASEURL')
+    username = os.getenv('USERNAME')
+    password = os.getenv('PASSWORD')
+    logging.info(f"Crawling objects with type {type}")
+    bearer = BearerToken(base_url, username, password)
+    enrich_objects(base_url, bearer, item_prefix)
 
 
 if __name__ == '__main__':
