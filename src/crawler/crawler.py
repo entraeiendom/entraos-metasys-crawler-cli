@@ -30,7 +30,7 @@ except ModuleNotFoundError:
 
 
 def db_engine():
-    dsn = os.getenv('DSN')
+    dsn = os.environ['DSN']
     engine = create_engine(dsn)
     return engine
 
@@ -82,24 +82,25 @@ def get_objects(base_url: str, bearer: BearerToken, object_type: int):
         time.sleep(1)
 
 
-def enrich_single_object(base_url: str, bearer: BearerToken, object: MetasysObject):
+def enrich_single_object(base_url: str, bearer: BearerToken, item_object: MetasysObject):
     try:
-        resp = requests.get(base_url + f"/objects/{object.id}", auth=bearer)
-        object.lastCrawl = datetime.now(timezone.utc)
-        object.response = resp.text
-        object.successes += 1
+        resp = requests.get(base_url + f"/objects/{item_object.id}", auth=bearer)
+        item_object.lastCrawl = datetime.now(timezone.utc)
+        item_object.response = resp.text
+        item_object.successes += 1
     except Exception as e:
-        object.lastError = datetime.now(timezone.utc)
-        object.errors += 1
+        item_object.lastError = datetime.now(timezone.utc)
+        item_object.errors += 1
+        logging.error(e)
 
 
 def enrich_objects(base_url: str, bearer: BearerToken, item_prefix: str):
     session = db_session()
-    objects = session.query(MetasysObject).filter(MetasysObject.itemReference.like(item_prefix + '%')).all()
-    print(f"Will crawl {len(objects)} objects...")
-    for object in objects:
-        print(f"Enriching object {object.id}")
-        enrich_single_object(base_url, bearer, object)
+    item_objects = session.query(MetasysObject).filter(MetasysObject.itemReference.like(item_prefix + '%')).all()
+    print(f"Will crawl {len(item_objects)} objects...")
+    for item_object in item_objects:
+        print(f"Enriching object {item_object.id}")
+        enrich_single_object(base_url, bearer, item_object)
         session.commit()  # Commit after each object. Implicit bail out.
         time.sleep(2)
 
@@ -134,9 +135,9 @@ def flush():
 @cli.command()
 @click.option('--object-type', default=165, type=click.INT)
 def objects(object_type):
-    base_url = os.getenv('METASYS_BASEURL')
-    username = os.getenv('METASYS_USERNAME')
-    password = os.getenv('METASYS_PASSWORD')
+    base_url = os.environ['METASYS_BASEURL']
+    username = os.environ['METASYS_USERNAME']
+    password = os.environ['METASYS_PASSWORD']
     logging.info(f"Crawling objects with type {type}")
     bearer = BearerToken(base_url, username, password)
     get_objects(base_url, bearer, object_type)
@@ -145,9 +146,9 @@ def objects(object_type):
 @cli.command()
 @click.option('--item-prefix', type=click.STRING)
 def deep(item_prefix):
-    base_url = os.getenv('METASYS_BASEURL')
-    username = os.getenv('METASYS_USERNAME')
-    password = os.getenv('METASYS_PASSWORD')
+    base_url = os.environ['METASYS_BASEURL']
+    username = os.environ['METASYS_USERNAME']
+    password = os.environ['METASYS_PASSWORD']
     bearer = BearerToken(base_url, username, password)
     enrich_objects(base_url, bearer, item_prefix)
 
