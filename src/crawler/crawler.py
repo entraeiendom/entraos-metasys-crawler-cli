@@ -145,10 +145,9 @@ def objects(object_type):
 @cli.command()
 @click.option('--item-prefix', type=click.STRING)
 def deep(item_prefix):
-    base_url = os.getenv('BASEURL')
-    username = os.getenv('USERNAME')
-    password = os.getenv('PASSWORD')
-    logging.info(f"Crawling objects with type {type}")
+    base_url = os.getenv('METASYS_BASEURL')
+    username = os.getenv('METASYS_USERNAME')
+    password = os.getenv('METASYS_PASSWORD')
     bearer = BearerToken(base_url, username, password)
     enrich_objects(base_url, bearer, item_prefix)
 
