@@ -57,6 +57,12 @@ Once it completes you can run the more intrusive crawl:
 ```
 poetry run crawler deep
 ```
+If you wanna do a somewhat more specific crawl you can give a prefix that will limit the crawl to a part of the system, 
+based on the itemReference identifier. Do this:
+```
+poetry run crawler deep --item-prefix GP-SXD9E-113:SOKP22-NAE4/
+```
+And the crawler will limit the enrichment to items with that prefix (building KP22, substation NAE4).
 
 If you wanna reset the database:
 ```
