@@ -23,9 +23,9 @@ poetry install
 ## Setting up the environment
 
 Create a .env file containing the following:
- * BASEURL - Base URL to the Metasys API, ie http://192.168.63.21/api/v2 or similar
- * USERNAME
- * PASSWORD
+ * METASYS_BASEURL - Base URL to the Metasys API, ie http://192.168.63.21/api/v2 or similar
+ * METASYS_USERNAME
+ * METASYS_PASSWORD
  * DSN - Database connection string, "postgresql://crawler:test4crawl@localhost:5432/metasys_crawler", this is a [libpq](https://www.postgresql.org/docs/11/libpq-connect.html) connection string, not a psycopg2 key/value DSN.
 
 ### Setup Postgresql
