@@ -134,9 +134,9 @@ def flush():
 @cli.command()
 @click.option('--object-type', default=165, type=click.INT)
 def objects(object_type):
-    base_url = os.getenv('BASEURL')
-    username = os.getenv('USERNAME')
-    password = os.getenv('PASSWORD')
+    base_url = os.getenv('METASYS_BASEURL')
+    username = os.getenv('METASYS_USERNAME')
+    password = os.getenv('METASYS_PASSWORD')
     logging.info(f"Crawling objects with type {type}")
     bearer = BearerToken(base_url, username, password)
     get_objects(base_url, bearer, object_type)
