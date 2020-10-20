@@ -1,0 +1,50 @@
+{
+    "total": 6,
+    "next": null,
+    "previous": "https://192.168.242.15/api/v2/objects?type=165&page=1&pageSize=10&sort=name",
+    "items": [
+        {
+            "id": "5E43C541-365B-452B-8121-4FFCA82FF09C",
+            "itemReference": "SD001:BA76-NAE99/Powermeter.floor04",
+            "name": "Powermeter.floor04",
+            "typeUrl": "https://192.168.242.15/api/v2/enumSets/508/members/165",
+            "self": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C",
+            "parentUrl": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C",
+            "objectsUrl": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C/objects",
+            "networkDeviceUrl": "https://192.168.242.15/api/v2/networkDevices/5E43C541-365B-452B-8121-4FFCA82FF09C",
+            "pointsUrl": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C/points",
+            "trendedAttributesUrl": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C/trendedAttributes",
+            "alarmsUrl": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C/alarms",
+            "auditsUrl": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C/audits"
+        },
+        {
+            "id": "F7DEE345-A2B1-4D18-A999-06E3BEA88863",
+            "itemReference": "GP-SXD9E-113:SOG53-NAE3/Powermeter.floor05",
+            "name": "Powermeter.floor05",
+            "typeUrl": "https://192.168.242.15/api/v2/enumSets/508/members/165",
+            "self": "https://192.168.242.15/api/v2/objects/F7DEE345-A2B1-4D18-A999-06E3BEA88863",
+            "parentUrl": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C",
+            "objectsUrl": "https://192.168.242.15/api/v2/objects/F7DEE345-A2B1-4D18-A999-06E3BEA88863/objects",
+            "networkDeviceUrl": "https://192.168.242.15/api/v2/networkDevices/F7DEE345-A2B1-4D18-A999-06E3BEA88863",
+            "pointsUrl": "https://192.168.242.15/api/v2/objects/F7DEE345-A2B1-4D18-A999-06E3BEA88863/points",
+            "trendedAttributesUrl": "https://192.168.242.15/api/v2/objects/F7DEE345-A2B1-4D18-A999-06E3BEA88863/trendedAttributes",
+            "alarmsUrl": "https://192.168.242.15/api/v2/objects/F7DEE345-A2B1-4D18-A999-06E3BEA88863/alarms",
+            "auditsUrl": "https://192.168.242.15/api/v2/objects/F7DEE345-A2B1-4D18-A999-06E3BEA88863/audits"
+        },
+        {
+            "id": "7B599BFB-3A4A-4F75-85E4-D746FA4EA6E0",
+            "itemReference": "GP-SXD9E-113:SOG53-NAE6/Powermeter.floor06",
+            "name": "Powermeter.floor06",
+            "typeUrl": "https://192.168.242.15/api/v2/enumSets/508/members/165",
+            "self": "https://192.168.242.15/api/v2/objects/7B599BFB-3A4A-4F75-85E4-D746FA4EA6E0",
+            "parentUrl": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C",
+            "objectsUrl": "https://192.168.242.15/api/v2/objects/7B599BFB-3A4A-4F75-85E4-D746FA4EA6E0/objects",
+            "networkDeviceUrl": "https://192.168.242.15/api/v2/networkDevices/7B599BFB-3A4A-4F75-85E4-D746FA4EA6E0",
+            "pointsUrl": "https://192.168.242.15/api/v2/objects/7B599BFB-3A4A-4F75-85E4-D746FA4EA6E0/points",
+            "trendedAttributesUrl": "https://192.168.242.15/api/v2/objects/7B599BFB-3A4A-4F75-85E4-D746FA4EA6E0/trendedAttributes",
+            "alarmsUrl": "https://192.168.242.15/api/v2/objects/7B599BFB-3A4A-4F75-85E4-D746FA4EA6E0/alarms",
+            "auditsUrl": "https://192.168.242.15/api/v2/objects/7B599BFB-3A4A-4F75-85E4-D746FA4EA6E0/audits"
+        }
+    ],
+    "self": "https://192.168.242.15/api/v2/objects?type=165&page=2&pageSize=10&sort=name"
+}

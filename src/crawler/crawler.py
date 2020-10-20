@@ -45,7 +45,7 @@ def insert_item_from_list(session, item, object_type):
     obj_id = item["id"]
 
     existing_item = MetasysObject(id=obj_id)
-    if existing_item:
+    if existing_item.discovered:
         logging.info(f"Ignoring {obj_id}")
         return
 
@@ -60,24 +60,24 @@ def insert_item_from_list(session, item, object_type):
     session.commit()
 
 
-def get_objects(base_url: str, bearer: BearerToken, object_type: int):
+def get_objects(session: sqlalchemy.orm.session.Session, base_url: str,
+                bearer: BearerToken, object_type: int, delay: float):
     """ Get the list of objects from Metasys and store them in the database."""
-    session = db_session()
     page = 1
     while True:
         resp = requests.get(base_url +
-                            f"/objects?type={object_type}&page={page}&pageSize=100&sort=name",
+                            f"/objects?page={page}&type={object_type}&pageSize=100&sort=name",
                             auth=bearer)
         json = resp.json()
         items = json["items"]
         logging.info(f"Working on page ({page} - {len(items)} items")
-        if json["next"] is None:  # the last page has a none link to next.
-            break
         for item in json["items"]:
             insert_item_from_list(session, item, object_type)
         logging.info(f"Page({page}) complete.")
         page = page + 1
-        time.sleep(1)
+        if json["next"] is None:  # the last page has a none link to next.
+            break
+        time.sleep(delay)
 
 
 def enrich_single_object(base_url: str, bearer: BearerToken, item_object: MetasysObject):
@@ -93,9 +93,10 @@ def enrich_single_object(base_url: str, bearer: BearerToken, item_object: Metasy
         logging.error(requests_exception)
 
 
-def enrich_objects(base_url: str, bearer: BearerToken, item_prefix: str):
+def enrich_objects(session: sqlalchemy.orm.session.Session,
+                   base_url: str, bearer: BearerToken, delay: float,
+                   item_prefix: str = None):
     """ Get the list of objects we should enrich. """
-    session = db_session()
     if item_prefix:
         item_objects = session.query(MetasysObject) \
             .filter(MetasysObject.itemReference.like(item_prefix + '%')) \
@@ -109,7 +110,7 @@ def enrich_objects(base_url: str, bearer: BearerToken, item_prefix: str):
         print(f"Enriching object {item_object.id}")
         enrich_single_object(base_url, bearer, item_object)
         session.commit()  # Commit after each object. Implicit bail out.
-        time.sleep(2)
+        time.sleep(delay)
 
 
 #
@@ -151,7 +152,8 @@ def objects(object_type):
     password = os.environ['METASYS_PASSWORD']
     logging.info(f"Crawling objects with type {type}")
     bearer = BearerToken(base_url, username, password)
-    get_objects(base_url, bearer, object_type)
+    dbsess = db_session()
+    get_objects(dbsess, base_url, bearer, object_type, 1.0)
 
 
 @cli.command()
@@ -162,7 +164,8 @@ def deep(item_prefix):
     username = os.environ['METASYS_USERNAME']
     password = os.environ['METASYS_PASSWORD']
     bearer = BearerToken(base_url, username, password)
-    enrich_objects(base_url, bearer, item_prefix)
+    session = db_session()
+    enrich_objects(session, base_url, bearer, 2.0, item_prefix)
 
 
 if __name__ == '__main__':

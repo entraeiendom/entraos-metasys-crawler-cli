@@ -1,0 +1,39 @@
+{
+    "item": {
+        "id": "3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE",
+        "name": "Energi_kWh",
+        "description": "",
+        "bacnetObjectType": "objectTypeEnumSet.bacAvClass",
+        "objectCategory": "objectCategoryEnumSet.custom6Category",
+        "defaultAttribute": "attributeEnumSet.presentValue",
+        "presentValue": {
+            "value": 1054500.0,
+            "reliability": "reliabilityEnumSet.reliable",
+            "priority": "writePriorityEnumSet.priorityDefault"
+        },
+        "reliability": "reliabilityEnumSet.reliable",
+        "alarmState": "objectStatusEnumSet.osNormal",
+        "itemReference": "SD001:BA76-NAE99/Powermeter.floor01",
+        "minPresValue": 0.0,
+        "maxPresValue": 1.7E+38,
+        "units": "unitEnumSet.kwattHours",
+        "displayPrecision": "displayPrecisionEnumSet.displayPrecision1",
+        "covIncrement": 0.1,
+        "objectName": "BA76-NAE99/Powermeter.floor01",
+        "userNameIsBacnetObjName": false,
+        "outOfService": false,
+        "priorityArray": [
+            "Visning av data støttes ikke"
+        ],
+        "intrinsicAlarmingDefined": false
+    },
+    "typeUrl": "https://192.168.242.15/api/v2/enumSets/508/members/165",
+    "self": "https://192.168.242.15/api/v2/objects/3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE",
+    "parentUrl": "https://192.168.242.15/api/v2/objects/56C8F87B-74F6-4572-854A-E3F72810A9F1",
+    "objectsUrl": "https://192.168.242.15/api/v2/objects/3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE/objects",
+    "networkDeviceUrl": "https://192.168.242.15/api/v2/networkDevices/ee5a41d4-da38-5371-bf68-6beca67b6c6c",
+    "pointsUrl": "https://192.168.242.15/api/v2/objects/3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE/points",
+    "trendedAttributesUrl": "https://192.168.242.15/api/v2/objects/3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE/trendedAttributes",
+    "alarmsUrl": "https://192.168.242.15/api/v2/objects/3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE/alarms",
+    "auditsUrl": "https://192.168.242.15/api/v2/objects/3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE/audits"
+}
