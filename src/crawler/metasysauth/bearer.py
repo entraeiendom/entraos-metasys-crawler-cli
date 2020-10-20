@@ -45,7 +45,7 @@ class BearerToken(requests.auth.AuthBase):
         self.token = json["accessToken"]
         self.expires = json["expires"]
 
-    def validate(self):
+    def validate(self) -> int:
         """Make sure everything is in place for auth.
         Calls refresh() (if less than 600s left) or login()."""
         if not self.token:

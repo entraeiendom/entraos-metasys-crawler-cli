@@ -13,27 +13,11 @@ import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Local modules:
-# I wish poetry would manage the path automagically
-sys.path.append("src/crawler")
-
-from db.models import MetasysObject, Base  # pylint: disable=wrong-import-position
-from metasysauth.bearer import BearerToken  # pylint: disable=wrong-import-position
-
-__version__ = '0.1.0'
-
-# Try to load .env. Ignore failures - .env might not be present
-# in production if running in, say, Docker
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-    print('.env loaded')
-except ModuleNotFoundError:
-    print("Dotenv not found. Ignoring.")
+from crawler.db.models import MetasysObject, Base
+from crawler.metasysauth.bearer import BearerToken
 
 
-def db_engine():
+def db_engine() -> sqlalchemy.engine.Engine:
     """ Acquire a database engine. Mostly used by session.
     Uses the DSN env variable. """
     dsn = os.environ['DSN']
@@ -41,8 +25,11 @@ def db_engine():
     return engine
 
 
-def db_session(engine=db_engine()) -> sqlalchemy.orm.session.Session:
+# Engine default to None. If it isn't set then we set it ourselves.
+def db_session(engine: sqlalchemy.engine.Engine = None) -> sqlalchemy.orm.session.Session:
     """ Get a database session. """
+    if not engine:
+        engine = db_engine()
     Session = sessionmaker(bind=engine)  # pylint: disable=invalid-name
     session = Session()
     return session
@@ -180,4 +167,14 @@ def deep(item_prefix):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
+    # Try to load .env. Ignore failures - .env might not be present
+    # in production if running in, say, Docker
+    try:
+        from dotenv import load_dotenv  # pylint: disable=wrong-import-position
+
+        load_dotenv()
+        logging.info('.env loaded')
+    except ModuleNotFoundError:
+        print("Dotenv not found. Ignoring.")
+
     cli()
