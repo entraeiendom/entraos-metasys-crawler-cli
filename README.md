@@ -45,8 +45,22 @@ Now you can have the crawler create the tables it needs:
 ```shell script
 poetry run crawler createdb
 ```
- 
+
+## Running the tests w/coverage
+```
+poetry run pytest --cov=crawler
+```
+
+## Linting
+```
+poetry run pylint src
+```
+
 ## Running the crawler
+
+The crawler has built in help. Just run 
+```poetry run crawler```
+and it'll show the built in help.
 
 The crawler runs in two phases. First it collects the list of objects.
 ```

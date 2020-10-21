@@ -1,26 +1,24 @@
 """ Crawler for the Metasys API."""
-# pylint disable=wrong-import-position
-from datetime import timezone, datetime
-import sys
-import os
 import logging
+import os
 import time
+from datetime import timezone, datetime
 
 import click
 import requests
 import sqlalchemy
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from crawler.db.models import MetasysObject, Base
-from crawler.metasysauth.bearer import BearerToken
+from db.models import MetasysObject, MetasysNetworkDevice, Base
+from db.base import get_dsn
+from metasysauth.bearer import BearerToken
 
 
 def db_engine() -> sqlalchemy.engine.Engine:
     """ Acquire a database engine. Mostly used by session.
     Uses the DSN env variable. """
-    dsn = os.environ['DSN']
+    dsn = get_dsn()
     engine = create_engine(dsn)
     return engine
 
@@ -37,15 +35,15 @@ def db_session(engine: sqlalchemy.engine.Engine = None) -> sqlalchemy.orm.sessio
 
 def get_uuid_from_url(url: str) -> str:
     """ Strip the URL from the string. Returns the UUID. """
-    return url.split('objects/')[1]
+    return url.split('/')[-1]
 
 
-def insert_item_from_list(session, item, object_type):
+def insert_object(session, item, object_type):
     """ Insert an item into the database if it doesn't exists. """
     obj_id = item["id"]
 
-    existing_item = MetasysObject(id=obj_id)
-    if existing_item.discovered:
+    existing_item = session.query(MetasysObject).filter_by(id=obj_id).first()
+    if existing_item and existing_item.discovered:
         logging.info(f"Ignoring {obj_id}")
         return
 
@@ -68,14 +66,14 @@ def get_objects(session: sqlalchemy.orm.session.Session, base_url: str,
         resp = requests.get(base_url +
                             f"/objects?page={page}&type={object_type}&pageSize=100&sort=name",
                             auth=bearer)
-        json = resp.json()
-        items = json["items"]
+        json_response = resp.json()
+        items = json_response["items"]
         logging.info(f"Working on page ({page} - {len(items)} items")
-        for item in json["items"]:
-            insert_item_from_list(session, item, object_type)
+        for item in json_response["items"]:
+            insert_object(session, item, object_type)
         logging.info(f"Page({page}) complete.")
         page = page + 1
-        if json["next"] is None:  # the last page has a none link to next.
+        if json_response["next"] is None:  # the last page has a none link to next.
             break
         time.sleep(delay)
 
@@ -113,25 +111,70 @@ def enrich_objects(session: sqlalchemy.orm.session.Session,
         time.sleep(delay)
 
 
+def insert_network_device_from_list(session, item):
+    """ Insert an network device into the database if it doesn't exists. """
+    obj_id = item["id"]
+
+    existing_item = session.query(MetasysNetworkDevice).filter_by(id=obj_id).first()
+    if existing_item and existing_item.discovered:
+        logging.info(f"Ignoring {obj_id}")
+        return
+
+    parent_url = item["parentUrl"]
+    if parent_url:
+        parent_id = get_uuid_from_url(item["parentUrl"])
+    else:
+        parent_id = None
+
+    logging.info(f"Inserting {obj_id}")
+    session.add(MetasysNetworkDevice(id=obj_id,
+                                     parentId=parent_id,
+                                     itemReference=item["itemReference"],
+                                     name=item["name"],
+                                     discovered=datetime.now(timezone.utc)
+                                     ))
+    session.commit()
+
+
+def get_network_devices(session: sqlalchemy.orm.session.Session,
+                        base_url: str,
+                        bearer: BearerToken,
+                        delay: float):
+    """ Get the list of objects from Metasys and store them in the database."""
+    page = 1
+    while True:
+        resp = requests.get(base_url +
+                            f"/networkDevices?page={page}&pageSize=100&sort=name",
+                            auth=bearer)
+        json_response = resp.json()
+        items = json_response["items"]
+        logging.info(f"Working on page ({page} - {len(items)} items")
+        for item in json_response["items"]:
+            insert_network_device_from_list(session, item)
+        logging.info(f"Page({page}) complete.")
+        page = page + 1
+        if json_response["next"] is None:  # the last page has a none link to next.
+            break
+        time.sleep(delay)
+
+
 #
 # Click setup below
 #
 
 @click.group()
 def cli():
-    """ Main entrypoint for the cli """
-    print(f"Metasys crawler {__version__}")
+    """ Crawler CLI for the Metasys API """
+    # print(f"Metasys crawler {__version__}")
+    logging.basicConfig(level=logging.INFO)
 
-
-@cli.command()  # @cli, not @click!
-def createdb():
-    """ Creates a database. We likely wanna use migrations at some point instead. """
-    logging.info(f"Creating the database")
     try:
-        engine = db_engine()
-        Base.metadata.create_all(engine)
-    except Exception as e:
-        logging.error(f"While creating my tables: {e}")
+        from dotenv import load_dotenv  # pylint: disable=wrong-import-position
+
+        load_dotenv()
+        logging.info('.env loaded')
+    except ModuleNotFoundError:
+        print("Dotenv not found. Ignoring.")
 
 
 @cli.command()
@@ -150,7 +193,7 @@ def objects(object_type):
     base_url = os.environ['METASYS_BASEURL']
     username = os.environ['METASYS_USERNAME']
     password = os.environ['METASYS_PASSWORD']
-    logging.info(f"Crawling objects with type {type}")
+    logging.info(f"Crawling objects with type {object_type}")
     bearer = BearerToken(base_url, username, password)
     dbsess = db_session()
     get_objects(dbsess, base_url, bearer, object_type, 1.0)
@@ -168,16 +211,17 @@ def deep(item_prefix):
     enrich_objects(session, base_url, bearer, 2.0, item_prefix)
 
 
+@cli.command()
+def network_devices():
+    """Get the list of networking devices and store them in the database."""
+    base_url = os.environ['METASYS_BASEURL']
+    username = os.environ['METASYS_USERNAME']
+    password = os.environ['METASYS_PASSWORD']
+    logging.info(f"Crawling objects with type {type}")
+    bearer = BearerToken(base_url, username, password)
+    dbsess = db_session()
+    get_network_devices(dbsess, base_url, bearer, 1.0)
+
+
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    # Try to load .env. Ignore failures - .env might not be present
-    # in production if running in, say, Docker
-    try:
-        from dotenv import load_dotenv  # pylint: disable=wrong-import-position
-
-        load_dotenv()
-        logging.info('.env loaded')
-    except ModuleNotFoundError:
-        print("Dotenv not found. Ignoring.")
-
     cli()
