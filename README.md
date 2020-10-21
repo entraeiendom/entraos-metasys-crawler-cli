@@ -43,8 +43,10 @@ GRANT ALL PRIVILEGES ON DATABASE metasys_crawler TO crawler;
 
 Now you can have the crawler create the tables it needs:
 ```shell script
-poetry run crawler createdb
+poetry run alembic upgrade head
 ```
+If the database changes you might need to run this in order to get the
+latest database structure.
 
 ## Running the tests w/coverage
 ```
