@@ -1,16 +1,4 @@
 [[package]]
-name = "alchemy-mock"
-version = "0.4.3"
-description = "SQLAlchemy mock helpers."
-category = "dev"
-optional = false
-python-versions = "*"
-
-[package.dependencies]
-six = "*"
-sqlalchemy = "*"
-
-[[package]]
 name = "alembic"
 version = "1.4.3"
 description = "A database migration tool for SQLAlchemy."
@@ -104,7 +92,7 @@ toml = ["toml"]
 
 [[package]]
 name = "entraos-metasys-crawler-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "Metasys crawler"
 category = "main"
 optional = false
@@ -406,13 +394,9 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "1efa5560faf650a33367bda7bb42b740b95987fe13c3256606db6010419de7af"
+content-hash = "07b5e1cf93a4c6a55f8b7fe4b19090a7a1c9a0a2d039b9ef346f6a478df4b87d"
 
 [metadata.files]
-alchemy-mock = [
-    {file = "alchemy-mock-0.4.3.tar.gz", hash = "sha256:7914c3f56aa7dd793d31a5ea3816972ff57de6e3c82651febfaab135e8f39d7a"},
-    {file = "alchemy_mock-0.4.3-py2.py3-none-any.whl", hash = "sha256:e076b11cdef76638f4de70d50f0d8cb851d69c41346d984371f757c8fb4a0efa"},
-]
 alembic = [
     {file = "alembic-1.4.3-py2.py3-none-any.whl", hash = "sha256:4e02ed2aa796bd179965041afa092c55b51fb077de19d61835673cc80672c01c"},
     {file = "alembic-1.4.3.tar.gz", hash = "sha256:5334f32314fb2a56d86b4c4dd1ae34b08c03cae4cb888bc699942104d66bc245"},

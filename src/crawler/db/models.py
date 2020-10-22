@@ -13,7 +13,7 @@ class MetasysObject(Base):  # pylint: disable=too-few-public-methods
     in the deep crawl."""
     __tablename__ = "metasysCrawl"
     id = Column(UUID(as_uuid=True), primary_key=True)
-    parentId = Column(UUID(as_uuid=True), index=True, nullable=False)
+    parentId = Column(UUID(as_uuid=True), index=True, nullable=True)
     type = Column(Integer, index=True, nullable=False)
     discovered = Column(DateTime, nullable=False)
     lastCrawl = Column(DateTime, nullable=True)
