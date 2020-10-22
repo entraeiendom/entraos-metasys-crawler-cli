@@ -11,8 +11,8 @@ import properly whilst maintaining a src-style directory structure.
 import setuptools
 
 setuptools.setup(
-    name="entraos-metasys-crawler-cli",  # Replace with your own username
-    version="0.1.1",
+    name="entraos-metasys-crawler-cli",
+    version="0.1.8",
     author="Per Buer",
     author_email="per.buer@gmail.com",
     description="Metasys crawler",

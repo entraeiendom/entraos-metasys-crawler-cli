@@ -1,8 +1,9 @@
 """ Crawler for the Metasys API."""
-import logging
 import os
+import sys
 import time
 from datetime import timezone, datetime
+import logging
 
 import click
 import requests
@@ -10,9 +11,17 @@ import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+# Editable
+# sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), 'src/crawler')))
+
 from db.models import MetasysObject, MetasysNetworkDevice, Base
 from db.base import get_dsn
 from metasysauth.bearer import BearerToken
+
+
+# Set up the logging in the global namespace.
+# Note that we might add file output in the click section
+# if we get to it.
 
 
 def db_engine() -> sqlalchemy.engine.Engine:
@@ -115,14 +124,16 @@ def enrich_thing(session: sqlalchemy.orm.session.Session,
     if item_prefix:
         item_objects = session.query(source_class) \
             .filter(source_class.itemReference.like(item_prefix + '%')) \
+            .filter(source_class.successes == 0) \
             .all()
+        # todo: move the successes part out to parameter or smthng.
     else:
         # Refresh all objects:
         item_objects = session.query(source_class).all()
 
-    print(f"Will crawl {len(item_objects)} objects...")
+    logging.debug(f"Will crawl {len(item_objects)} objects...")
     for item_object in item_objects:
-        print(f"Enriching object {item_object.id}")
+        logging.info(f"Enriching object {item_object.id}")
         enrich_single_thing(base_url, bearer, item_object)
         session.commit()  # Commit after each object. Implicit bail out.
         time.sleep(delay)
@@ -190,6 +201,7 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
             print(f'{type_idx},{total}', flush=True)
         time.sleep(delay)
 
+
 #
 # Click setup below
 #
@@ -198,15 +210,16 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
 def cli():
     """ Crawler CLI for the Metasys API """
     # print(f"Metasys crawler {__version__}")
-    logging.basicConfig(level=logging.INFO)
+
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     try:
         from dotenv import load_dotenv  # pylint: disable=wrong-import-position
-
         load_dotenv()
         logging.info('.env loaded')
     except ModuleNotFoundError:
-        print("Dotenv not found. Ignoring.")
+        logging.warning("Dotenv not found. Assuming the environment is set up.")
 
 
 @cli.command()
@@ -271,7 +284,8 @@ def count_object_types():
     username = os.environ['METASYS_USERNAME']
     password = os.environ['METASYS_PASSWORD']
     bearer = BearerToken(base_url, username, password)
-    count_object_by_type(base_url, bearer, 0.2 , 0, 2000)
+    count_object_by_type(base_url, bearer, 0.2, 0, 2000)
+
 
 if __name__ == '__main__':
     cli()

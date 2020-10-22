@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "crawler"
-version = "0.1.0"
+version = "0.1.8"
 description = "API Crawler for Metasys"
 authors = ["Per Buer <per.buer@gmail.com>"]
 license = "Apache-2.0"
@@ -24,6 +24,7 @@ pylint = "^2.6.0"
 pytest = "^6.1.1"
 requests-mock = "^1.8.0"
 pytest-cov = "^2.10.1"
+bump2version = "^1.0.1"
 
 [build-system]
 requires = ["poetry>=0.12"]
