@@ -1,11 +1,11 @@
 """Containes the BearerToken class which is our driver
 for the bearer token auth used by metasys. """
 
+import logging
 import datetime
 from datetime import timezone
 import requests
 from dateutil.parser import isoparse
-import logging
 
 
 class BearerToken(requests.auth.AuthBase):
@@ -47,12 +47,11 @@ class BearerToken(requests.auth.AuthBase):
         """ Refreshes a still valid token. """
         logging.info("Refreshing token")
         self.validating = True
-        resp = requests.post(self.base_url + '/refreshToken', auth=self)  # This feels a bit wonky...
+        resp = requests.get(self.base_url + '/refreshToken', auth=self)  # This feels a bit wonky...
         self.validating = False
         json_resp = resp.json()
-        print("JSON:", json_resp)
         self.token = json_resp["accessToken"]
-        self.expires = json_resp["expires"]
+        self.expires = isoparse(json_resp["expires"])
 
     def validate(self) -> int:
         """Make sure everything is in place for auth.

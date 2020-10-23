@@ -1,6 +1,5 @@
 """ Crawler for the Metasys API."""
 import os
-import sys
 import time
 from datetime import timezone, datetime
 import logging
@@ -32,9 +31,9 @@ def db_engine() -> sqlalchemy.engine.Engine:
     return engine
 
 
-# Engine default to None. If it isn't set then we set it ourselves.
 def db_session(engine: sqlalchemy.engine.Engine = None) -> sqlalchemy.orm.session.Session:
     """ Get a database session. """
+    # Engine default to None. If it isn't set then we set it ourselves.
     if not engine:
         engine = db_engine()
     Session = sessionmaker(bind=engine)  # pylint: disable=invalid-name
@@ -107,12 +106,12 @@ def enrich_single_thing(base_url: str, bearer: BearerToken, item_object: Metasys
         logging.error(requests_exception)
 
 
-def enrich_thing(session: sqlalchemy.orm.session.Session,
-                 source_class: Base,
-                 base_url: str,
-                 bearer: BearerToken,
-                 delay: float,
-                 item_prefix: str = None) -> None:
+def enrich_things(session: sqlalchemy.orm.session.Session,
+                  source_class: Base,
+                  base_url: str,
+                  bearer: BearerToken,
+                  delay: float,
+                  item_prefix: str = None) -> None:
     """ Get a list of "things" we should enrich. Things can be anything with a UUID
     available through the /objects endpoint. Supply the class from the model of the thing you
     want to enrich.
@@ -260,7 +259,7 @@ def deep(item_prefix, source):
         source_class = MetasysObject
     else:
         source_class = MetasysNetworkDevice
-    enrich_thing(session, source_class, base_url, bearer, 2.0, item_prefix)
+    enrich_things(session, source_class, base_url, bearer, 2.0, item_prefix)
 
 
 @cli.command()

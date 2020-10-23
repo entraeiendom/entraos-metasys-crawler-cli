@@ -89,3 +89,42 @@ poetry run crawler flush
 ```shell script
 poetry run crawler --help
 ```
+
+## How to setup your dev environment
+
+I use Pycharm for this. So I'll document that.
+
+### Prerequisites
+ * Pycharm (or IntelliJ with the Python plugin)
+ * Poetry plugin
+ * Python 3.8 or later
+ * Python Poetry installed globally
+ 
+Clone the project. "poetry install" to install dependencies.
+Open the project. Set interpreter. Add interpreter. 
+Choose poetry. Existing environment. 
+Pick the venv that poetry just created.
+
+
+"Edit configurations". Script path is the path to src/crawler/crawler.py.
+Add parameters depending on what you want the crawler to do.
+
+Create an ".env" file.
+Now you should be able to run the crawler through pycharm and debug it.
+
+Let's get the tests running in pycharm.
+Preferences. Set pytest as the testing tool. Create a configuration
+where you set the target to "tests", this should be enough to make
+pycharm grok the tests.
+
+I use "bump2version" to manage the versions mentioned in pyproject.toml
+and src/crawler/setup.py. I'll complete this once we have a release
+process in place.
+
+## Bugs and weird stuff
+
+I'm not entirely happy with the way the source layout works. If I do 
+changes to the modules (src/crawler/metasysauth/...) poetry run pick these
+up unless I run poetry install first. It works fine in Pycharm as Pycharm
+activly manages the PYTHONPATH. So I only run the crawler though Pycharm.
+

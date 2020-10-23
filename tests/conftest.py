@@ -1,10 +1,26 @@
 """Shared fixtures are placed here and automagically discovered by pytest."""
+import logging
+import sys
 
 import datetime
 
 import pytest
 
 from crawler.metasysauth.bearer import BearerToken  # pylint: disable=wrong-import-position
+
+
+def pytest_sessionstart(session):
+    # Setup logging to stdout so pytest captures it.
+    # It seems to ignore stderr.
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
 
 @pytest.fixture
 def username():
@@ -19,7 +35,6 @@ def password():
 @pytest.fixture()
 def baseurl():
     return 'http://localhost/api/v2'
-
 
 
 @pytest.fixture()
