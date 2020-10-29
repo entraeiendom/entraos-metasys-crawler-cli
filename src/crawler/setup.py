@@ -12,7 +12,7 @@ import setuptools
 
 setuptools.setup(
     name="entraos-metasys-crawler-cli",
-    version="0.1.8",
+    version="0.1.9",
     author="Per Buer",
     author_email="per.buer@gmail.com",
     description="Metasys crawler",

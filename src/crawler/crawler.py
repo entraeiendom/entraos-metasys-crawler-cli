@@ -118,21 +118,28 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
     ATM we can query both the Objects and the Network Device tables. It needs a itemReference if
     we are to do filtering."""
 
-    # if not issubclass(source_class, Base):
-    #    raise ValueError('Supplied source_class is not sqlalchemy model class derived from Base')
+    only_new_items = True
+
+    # We could perhaps  check source_class here, but that isn't pythonic. 🦆 ftw!
+
+    build_query = session.query(source_class)
+
     if item_prefix:
-        item_objects = session.query(source_class) \
-            .filter(source_class.itemReference.like(item_prefix + '%')) \
-            .filter(source_class.successes == 0) \
-            .all()
-        # todo: move the successes part out to parameter or smthng.
-    else:
-        # Refresh all objects:
-        item_objects = session.query(source_class).all()
+        build_query = build_query.filter(source_class.itemReference.like(item_prefix + '%'))
+
+    # Filter out stuff and don't like:
+    build_query = build_query.filter(source_class.itemReference.notlike('%Programming%'))
+    build_query = build_query.filter(source_class.name.notlike('Trend%'))
+    build_query = build_query.filter(source_class.name.notlike('%Alarm%'))
+
+    if only_new_items:
+        build_query = build_query.filter(source_class.successes == 0)
+
+    item_objects = build_query.all()
 
     logging.debug(f"Will crawl {len(item_objects)} objects...")
     for item_object in item_objects:
-        logging.info(f"Enriching object {item_object.id}")
+        logging.info(f"Enriching object {item_object.id} - {item_object.name}")
         enrich_single_thing(base_url, bearer, item_object)
         session.commit()  # Commit after each object. Implicit bail out.
         time.sleep(delay)
