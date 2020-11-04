@@ -250,7 +250,7 @@ def push_object(session: sqlalchemy.orm.session.Session,
         if item.response is None:
             logging.debug(f'Ignoring item {item.id} which has no response recorded')
             continue
-        item_d = item.__dict__
+        item_d = item.as_dict()
 
         # delete these two
         if '_sa_instance_state' in item_d:
@@ -274,9 +274,8 @@ def push_object(session: sqlalchemy.orm.session.Session,
         json_str = base64.b64encode(response_encoded).decode('utf8')
         item_d['response'] = json_str
 
-        # Create these (todo: Fill these with proper values)
         item_d['realEstate'] = __metasysid_to_real_estate(item.itemReference)
-        item_d['tfm'] = None  # Don't know what to do with this one. We don't have TFM.
+        item_d['tfm'] = None  # Todo: Don't know what to do with this one. We don't have TFM.
         item_d['description'] = json_resp_dict['item']['description']
         realestate_id = item_d['realEstate']
 
@@ -284,10 +283,16 @@ def push_object(session: sqlalchemy.orm.session.Session,
         # requests doesn't support supplying an encoder so we have to do this in two steps.
         json_data = json.dumps(item_d, default=__json_converter)
 
-        # resp = requests.post(f'http://localhost:8889/metadata/bas/realestate/{realestate_id}',
-        #                      headers={'Content-Type': 'application/json'},
-        #                      data=json_data)
+        resp = requests.post(f'http://localhost:8889/metadata/bas/realestate/{realestate_id}',
+                             headers={'Content-Type': 'application/json'},
+                             data=json_data)
+
+        resp.raise_for_status()  # Bail on error.
         logging.debug(f'{item.id} uploaded')
+
+        # Not catching errors here. Abort on failure.
+        item.lastSync = datetime.now(tz=timezone.utc)
+        session.commit()
         # print(item)
         # print(bas)
 

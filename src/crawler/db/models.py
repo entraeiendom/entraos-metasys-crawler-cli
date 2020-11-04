@@ -28,6 +28,16 @@ class MetasysObject(Base):  # pylint: disable=too-few-public-methods
     itemReference = Column(String, nullable=True)
     lastSync = Column(DateTime, nullable=True)
 
+    def as_dict(self, excluded_keys: dict = {}) -> dict:
+        """ Returns a dict with copies of the data in the object.
+        Populate the _excluded_keys to omit
+        """
+
+        return dict(
+            (key, value)
+            for (key, value) in self.__dict__.items()
+            if key not in excluded_keys
+            )
 
 class MetasysNetworkDevice(Base):  # pylint: disable=too-few-public-methods
     """ This is where we store the Network Devices we find in the crawl.
