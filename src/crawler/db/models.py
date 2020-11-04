@@ -26,6 +26,7 @@ class MetasysObject(Base):  # pylint: disable=too-few-public-methods
     # Included for convenience:
     name = Column(String, nullable=True)
     itemReference = Column(String, nullable=True)
+    lastSync = Column(DateTime, nullable=True)
 
 
 class MetasysNetworkDevice(Base):  # pylint: disable=too-few-public-methods

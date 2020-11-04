@@ -1,6 +1,10 @@
 """ Crawler for the Metasys API."""
+import base64
+import json
 import os
+import re
 import time
+import uuid
 from datetime import timezone, datetime
 import logging
 
@@ -16,11 +20,7 @@ from sqlalchemy.orm import sessionmaker
 from db.models import MetasysObject, MetasysNetworkDevice, Base
 from db.base import get_dsn
 from metasysauth.bearer import BearerToken
-
-
-# Set up the logging in the global namespace.
-# Note that we might add file output in the click section
-# if we get to it.
+from model.bas import Bas
 
 
 def db_engine() -> sqlalchemy.engine.Engine:
@@ -208,16 +208,105 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
         time.sleep(delay)
 
 
+def __metasysid_to_real_estate(metasysid: str) -> str:
+    """Takes something like 'GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4' and spits out 'kjorbo'"""
+
+    buildingmap = {
+        'SOKP16': 'kjorbo'
+    }
+    try:
+        rx = re.compile('^([^:]+):([^-]+)')
+        sd, building = rx.findall(metasysid)[0]
+    except Exception as e:
+        logging.error(f"Could not make sense of {metasysid}")
+        raise ValueError("Regular expression error")
+    return buildingmap[building]
+
+
+def __json_converter(whatever):
+    """Helper to match various types into something that the JSON lib can grok."""
+    if isinstance(whatever, datetime):
+        return whatever.utcnow().isoformat() + 'Z'  # somewhat of a hack.
+    if isinstance(whatever, uuid.UUID):
+        return str(whatever)
+
+
+def push_object(session: sqlalchemy.orm.session.Session,
+                delay: float,
+                item_prefix: str = None) -> None:
+    """ Push things into the cloud."""
+
+    build_query = session.query(MetasysObject)
+
+    # If we wanna qualify the query further do it like this:
+    if item_prefix:
+        build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + '%'))
+
+    for item in build_query.all():
+        logging.debug(f'Processing {item.id}')
+        if item.successes == 0:
+            logging.debug(f'Ignoring item {item.id} which has not been crawled')
+            continue
+        if item.response is None:
+            logging.debug(f'Ignoring item {item.id} which has no response recorded')
+            continue
+        item_d = item.__dict__
+
+        # delete these two
+        if '_sa_instance_state' in item_d:
+            del item_d['_sa_instance_state']  # internal from SQL Alchemy
+        else:
+            logging.error("We got an object that doesn't seem like a SQL Alchemy one... skipping")
+            raise ValueError("Internal error")
+
+        del item_d['lastSync']  # the cloud API doesn't know about this one.
+
+        # Parse the response. We need to make sure it looks ok and we wanna get some data from it.
+        json_resp_dict = json.loads(item_d['response'])
+        if 'message' in json_resp_dict:
+            logging.warning(f'JSON response {item.id} has a message. Ignoring. Message: "{json_resp_dict["message"]}"')
+            continue
+        #
+
+        # base64-encode the response so it can be represented as a string in the JSON we POST.
+
+        response_encoded = item_d['response'].encode('utf8')
+        json_str = base64.b64encode(response_encoded).decode('utf8')
+        item_d['response'] = json_str
+
+        # Create these (todo: Fill these with proper values)
+        item_d['realEstate'] = __metasysid_to_real_estate(item.itemReference)
+        item_d['tfm'] = None  # Don't know what to do with this one. We don't have TFM.
+        item_d['description'] = json_resp_dict['item']['description']
+        realestate_id = item_d['realEstate']
+
+        # Dict --> JSON with customer encoder:
+        # requests doesn't support supplying an encoder so we have to do this in two steps.
+        json_data = json.dumps(item_d, default=__json_converter)
+
+        # resp = requests.post(f'http://localhost:8889/metadata/bas/realestate/{realestate_id}',
+        #                      headers={'Content-Type': 'application/json'},
+        #                      data=json_data)
+        logging.debug(f'{item.id} uploaded')
+        # print(item)
+        # print(bas)
+
+
 #
 # Click setup below
 #
 
 @click.group()
-def cli():
+@click.option('--debug/--no-debug', default=False)
+def cli(debug):
     """ Crawler CLI for the Metasys API """
     # print(f"Metasys crawler {__version__}")
+    if debug:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
 
-    logging.basicConfig(level=logging.INFO,
+    logging.basicConfig(level=log_level,
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     try:
@@ -291,6 +380,15 @@ def count_object_types():
     password = os.environ['METASYS_PASSWORD']
     bearer = BearerToken(base_url, username, password)
     count_object_by_type(base_url, bearer, 0.2, 0, 2000)
+
+
+@cli.command()
+@click.option('--item-prefix', type=click.STRING)
+def push(item_prefix):
+    """Push cralwer data to the cloud."""
+    dbsess = db_session()
+
+    push_object(dbsess, 0.0, item_prefix)
 
 
 if __name__ == '__main__':

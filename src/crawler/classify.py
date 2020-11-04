@@ -91,6 +91,32 @@ class Parser:
         # Now we wanna collate them into a single response, weighing the various guess against each other.
 
 
+class TFMDetector(ParserRule):
+    rx: re.Pattern
+
+    #  +002=543.OU001-RK001T
+    # +H01=237.101-XS000NE MAN_DOWN (20.0.16)
+    def __init__(self):
+        super().__init__()
+        self.rx = re.compile('\+(\w+)=(\d+)[._](\d+)-(\w\w\d\d\d)?')
+
+    def __run_rx(self, target):
+        res = self.rx.findall(target)
+        if res:
+            print("Matched!")
+        else:
+            return None
+
+    def process(self, sensor: Sensor):
+        places = [sensor.resp['item']['itemReference'],
+                  sensor.resp['item']['name'],
+                  sensor.resp['item']['description']]
+        for target in places:
+            # print(f"Place: {target}")
+            res = self.__run_rx(target)
+        return None
+
+
 class ItemRefParser(ParserRule):
     rx: re.Pattern
 
@@ -293,19 +319,29 @@ def process_items():
     print(f'{len(build_query)} items to be considered.')
 
     parser = Parser()
-    parser.add_rule(ItemRefParser())
-    parser.add_rule(FloorGuesser1())
-    parser.add_rule(FloorGuesser2())
-    parser.add_rule(RoomGuesser1())
-    parser.add_rule(TemperatureDetector1())
-    parser.add_rule(Co2Detector1())
+    # parser.add_rule(ItemRefParser())
+    parser.add_rule(TFMDetector())
+    #parser.add_rule(FloorGuesser1())
+    #parser.add_rule(FloorGuesser2())
+    #parser.add_rule(RoomGuesser1())
+    #parser.add_rule(TemperatureDetector1())
+    #parser.add_rule(Co2Detector1())
+
+    undetected = Guess(real_estate=None, building=None, floor=None, type=None, room=None,
+                       sd=None, nae=None, obj=None, confidence=None)
 
     for item in build_query:
         sensor = Sensor(item)
         print(f'Processing sensor: {sensor.dbo.itemReference}')
         guess = parser.parse(sensor)
+        for key in sensor.resp['item'].keys():
+            if isinstance(sensor.resp['item'][key], str) and re.match('=', sensor.resp['item'][key]):
+                print('Found:', sensor.resp['item'][key])
 
-        print(guess)
+        if guess == undetected:
+            print("Nothing detected...")
+        else:
+            print(guess)
 
 
 def main():
