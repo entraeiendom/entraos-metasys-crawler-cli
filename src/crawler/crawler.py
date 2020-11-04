@@ -250,19 +250,12 @@ def push_object(session: sqlalchemy.orm.session.Session,
         if item.response is None:
             logging.debug(f'Ignoring item {item.id} which has no response recorded')
             continue
-        item_d = item.as_dict()
 
-        # delete these two
-        if '_sa_instance_state' in item_d:
-            del item_d['_sa_instance_state']  # internal from SQL Alchemy
-        else:
-            logging.error("We got an object that doesn't seem like a SQL Alchemy one... skipping")
-            raise ValueError("Internal error")
-
-        del item_d['lastSync']  # the cloud API doesn't know about this one.
+        # Copy the DBO into a dict, removing stuff we don't want.
+        item_as_dict = item.as_dict({'_sa_instance_state': True, 'lastSync': True})
 
         # Parse the response. We need to make sure it looks ok and we wanna get some data from it.
-        json_resp_dict = json.loads(item_d['response'])
+        json_resp_dict = json.loads(item_as_dict['response'])
         if 'message' in json_resp_dict:
             logging.warning(f'JSON response {item.id} has a message. Ignoring. Message: "{json_resp_dict["message"]}"')
             continue
@@ -270,18 +263,18 @@ def push_object(session: sqlalchemy.orm.session.Session,
 
         # base64-encode the response so it can be represented as a string in the JSON we POST.
 
-        response_encoded = item_d['response'].encode('utf8')
+        response_encoded = item_as_dict['response'].encode('utf8')
         json_str = base64.b64encode(response_encoded).decode('utf8')
-        item_d['response'] = json_str
+        item_as_dict['response'] = json_str
 
-        item_d['realEstate'] = __metasysid_to_real_estate(item.itemReference)
-        item_d['tfm'] = None  # Todo: Don't know what to do with this one. We don't have TFM.
-        item_d['description'] = json_resp_dict['item']['description']
-        realestate_id = item_d['realEstate']
+        item_as_dict['realEstate'] = __metasysid_to_real_estate(item.itemReference)
+        item_as_dict['tfm'] = None  # Todo: Don't know what to do with this one. We don't have TFM.
+        item_as_dict['description'] = json_resp_dict['item']['description']
+        realestate_id = item_as_dict['realEstate']
 
         # Dict --> JSON with customer encoder:
         # requests doesn't support supplying an encoder so we have to do this in two steps.
-        json_data = json.dumps(item_d, default=__json_converter)
+        json_data = json.dumps(item_as_dict, default=__json_converter)
 
         resp = requests.post(f'http://localhost:8889/metadata/bas/realestate/{realestate_id}',
                              headers={'Content-Type': 'application/json'},
