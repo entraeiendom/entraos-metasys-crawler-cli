@@ -64,6 +64,9 @@ The crawler has built in help. Just run
 ```poetry run crawler```
 and it'll show the built in help.
 
+The crawler accepts a global flag `--debug` which will print a bunch
+of stuff to the console.
+
 The crawler runs in two phases. First it collects the list of objects.
 ```
 poetry run crawler objects
@@ -83,6 +86,11 @@ And the crawler will limit the enrichment to items with that prefix (building KP
 If you wanna reset the database:
 ```
 poetry run crawler flush
+```
+
+Pushing data into BAS
+```
+poetry run crawler --item-prefix GP-SXD9E-113:SOKP16
 ```
 
 ### Help?

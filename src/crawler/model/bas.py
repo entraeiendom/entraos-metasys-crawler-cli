@@ -8,7 +8,7 @@ class Bas:
     id: uuid.UUID
     realEstate: str
     parentId: uuid.UUID
-    type: int
+    type: str
     discovered: datetime
     lastCrawl: datetime
     lastError: datetime

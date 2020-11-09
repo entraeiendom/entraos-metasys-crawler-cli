@@ -60,3 +60,12 @@ class MetasysNetworkDevice(Base):  # pylint: disable=too-few-public-methods
     itemReference = Column(String, nullable=True)
 #
 #
+
+class EnumSet(Base):  # pylint: disable=too-few-public-methods
+    """ This is where we store objects from the crawl. The fields that have
+    nullable=False are the ones written to by the initial crawls. The rest are added
+    in the deep crawl."""
+    __tablename__ = "enumSets"
+    id = Column(Integer, primary_key=True)
+    description = Column(String, nullable=False)
+    enumset = Column(Integer, nullable=False)

@@ -7,6 +7,7 @@ import time
 import uuid
 from datetime import timezone, datetime
 import logging
+from functools import lru_cache
 
 import click
 import requests
@@ -17,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 # Editable
 # sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), 'src/crawler')))
 
-from db.models import MetasysObject, MetasysNetworkDevice, Base
+from db.models import MetasysObject, MetasysNetworkDevice, EnumSet, Base
 from db.base import get_dsn
 from metasysauth.bearer import BearerToken
 from model.bas import Bas
@@ -212,7 +213,9 @@ def __metasysid_to_real_estate(metasysid: str) -> str:
     """Takes something like 'GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4' and spits out 'kjorbo'"""
 
     buildingmap = {
-        'SOKP16': 'kjorbo'
+        'SOKP16': 'kjorbo',
+        'SOKP14': 'kjorbo',
+        'SOKP22': 'kjorbo'
     }
     try:
         rx = re.compile('^([^:]+):([^-]+)')
@@ -231,10 +234,29 @@ def __json_converter(whatever):
         return str(whatever)
 
 
+@lru_cache(maxsize=256)
+def get_type_description(object_type: int) -> str:
+    """Returns the string representation of the object type. Note that
+    functools will cache the result of this so we don't have to hit
+    the database for every lookup. """
+    dbsess = db_session()
+    enumset = dbsess.query(EnumSet).filter_by(id=object_type).first()
+    if not enumset.description:
+        # Note that this will only fire off once per input as the result is cached.
+        logging.warning(f"No description found for type {object_type}")
+    return enumset.description
+
+
 def push_object(session: sqlalchemy.orm.session.Session,
                 delay: float,
                 item_prefix: str = None) -> None:
     """ Push things into the cloud."""
+
+    try:
+        base_url = os.getenv('ENTRAOS_BAS_BASEURL')
+    except KeyError:
+        logging.error("Environment variable ENTRAOS_BAS_BASEURL is not set")
+        quit(1)
 
     build_query = session.query(MetasysObject)
 
@@ -267,27 +289,60 @@ def push_object(session: sqlalchemy.orm.session.Session,
         json_str = base64.b64encode(response_encoded).decode('utf8')
         item_as_dict['response'] = json_str
 
+        #  transform type into something meaningful
+        item_as_dict['type'] = get_type_description(item_as_dict['type'])
+
+        #  do stuff that the API requires
         item_as_dict['realEstate'] = __metasysid_to_real_estate(item.itemReference)
-        item_as_dict['tfm'] = None  # Todo: Don't know what to do with this one. We don't have TFM.
+        item_as_dict['tfm'] = item_as_dict['name']
         item_as_dict['description'] = json_resp_dict['item']['description']
         realestate_id = item_as_dict['realEstate']
 
+
+        try:
+            bas_object = Bas(**item_as_dict)
+        except:
+            logging.error("Could not verify that item_as_dict adheres to model.")
+            continue
         # Dict --> JSON with customer encoder:
         # requests doesn't support supplying an encoder so we have to do this in two steps.
         json_data = json.dumps(item_as_dict, default=__json_converter)
 
-        resp = requests.post(f'http://localhost:8889/metadata/bas/realestate/{realestate_id}',
+        resp = requests.post(f'{base_url}/metadata/bas/realestate/{realestate_id}',
                              headers={'Content-Type': 'application/json'},
                              data=json_data)
 
         resp.raise_for_status()  # Bail on error.
-        logging.debug(f'{item.id} uploaded')
 
+        logging.debug(f'{item.id} uploaded')
+        # quit(0)
         # Not catching errors here. Abort on failure.
         item.lastSync = datetime.now(tz=timezone.utc)
         session.commit()
         # print(item)
         # print(bas)
+
+
+def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.session.Session,
+                  enumset: int, delay: float) -> None:
+    page = 1
+    while True:
+        resp = requests.get(base_url + f'/enumSets/{enumset}/members?page={page}&pageSize=1000',
+                            auth=bearer)
+        resp.raise_for_status()
+
+        json_response = resp.json()
+        for item in json_response['items']:
+            id = item['id']
+            description = item['description']
+            db_item = EnumSet(id=id, description=description or "", enumset=enumset)
+            dbsess.merge(db_item)
+            dbsess.commit()
+
+        page = page + 1
+        if json_response["next"] is None:  # the last page has a none link to next.
+            break
+        time.sleep(delay)
 
 
 #
@@ -387,6 +442,18 @@ def push(item_prefix):
     dbsess = db_session()
 
     push_object(dbsess, 0.0, item_prefix)
+
+
+@cli.command()
+@click.option('--enumset', type=click.INT)
+def get_enumset(enumset: int):
+    """Grabs an enumset from metasys and populates the local database with it."""
+    base_url = os.environ['METASYS_BASEURL']
+    username = os.environ['METASYS_USERNAME']
+    password = os.environ['METASYS_PASSWORD']
+    bearer = BearerToken(base_url, username, password)
+    dbsess = db_session()
+    grab_enumsets(base_url, bearer, dbsess, enumset, 1.0)
 
 
 if __name__ == '__main__':
