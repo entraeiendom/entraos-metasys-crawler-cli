@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import sys
 import time
 import uuid
 from datetime import timezone, datetime
@@ -107,19 +108,19 @@ def enrich_single_thing(base_url: str, bearer: BearerToken, item_object: Metasys
         logging.error(requests_exception)
 
 
+# This is the deep crawl.
 def enrich_things(session: sqlalchemy.orm.session.Session,
                   source_class: Base,
                   base_url: str,
                   bearer: BearerToken,
                   delay: float,
+                  refresh: bool,
                   item_prefix: str = None) -> None:
     """ Get a list of "things" we should enrich. Things can be anything with a UUID
     available through the /objects endpoint. Supply the class from the model of the thing you
     want to enrich.
     ATM we can query both the Objects and the Network Device tables. It needs a itemReference if
     we are to do filtering."""
-
-    only_new_items = True
 
     # We could perhaps  check source_class here, but that isn't pythonic. 🦆 ftw!
 
@@ -128,12 +129,12 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
     if item_prefix:
         build_query = build_query.filter(source_class.itemReference.like(item_prefix + '%'))
 
-    # Filter out stuff and don't like:
+    # Filter out stuff I don't like:
     build_query = build_query.filter(source_class.itemReference.notlike('%Programming%'))
-    build_query = build_query.filter(source_class.name.notlike('Trend%'))
+    build_query = build_query.filter(source_class.name.notlike('%Trend%'))
     build_query = build_query.filter(source_class.name.notlike('%Alarm%'))
 
-    if only_new_items:
+    if not refresh:
         build_query = build_query.filter(source_class.successes == 0)
 
     item_objects = build_query.all()
@@ -210,7 +211,8 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
 
 
 def __metasysid_to_real_estate(metasysid: str) -> str:
-    """Takes something like 'GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4' and spits out 'kjorbo'"""
+    """Takes something like 'GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4'
+    and spits out 'kjorbo'"""
 
     buildingmap = {
         'SOKP16': 'kjorbo',
@@ -256,7 +258,7 @@ def push_object(session: sqlalchemy.orm.session.Session,
         base_url = os.getenv('ENTRAOS_BAS_BASEURL')
     except KeyError:
         logging.error("Environment variable ENTRAOS_BAS_BASEURL is not set")
-        quit(1)
+        sys.exit(1)
 
     build_query = session.query(MetasysObject)
 
@@ -279,7 +281,8 @@ def push_object(session: sqlalchemy.orm.session.Session,
         # Parse the response. We need to make sure it looks ok and we wanna get some data from it.
         json_resp_dict = json.loads(item_as_dict['response'])
         if 'message' in json_resp_dict:
-            logging.warning(f'JSON response {item.id} has a message. Ignoring. Message: "{json_resp_dict["message"]}"')
+            logging.warning(f'JSON response {item.id} has a message. '
+                            f'Ignoring. Message: "{json_resp_dict["message"]}"')
             continue
         #
 
@@ -297,7 +300,6 @@ def push_object(session: sqlalchemy.orm.session.Session,
         item_as_dict['tfm'] = item_as_dict['name']
         item_as_dict['description'] = json_resp_dict['item']['description']
         realestate_id = item_as_dict['realEstate']
-
 
         try:
             bas_object = Bas(**item_as_dict)
@@ -333,9 +335,9 @@ def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.ses
 
         json_response = resp.json()
         for item in json_response['items']:
-            id = item['id']
+            enumset_id = item['id']
             description = item['description']
-            db_item = EnumSet(id=id, description=description or "", enumset=enumset)
+            db_item = EnumSet(id=enumset_id, description=description or "")
             dbsess.merge(db_item)
             dbsess.commit()
 
@@ -350,7 +352,7 @@ def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.ses
 #
 
 @click.group()
-@click.option('--debug/--no-debug', default=False)
+@click.option('--debug/--no-debug', default=False, help='Set log level to DEBUG.')
 def cli(debug):
     """ Crawler CLI for the Metasys API """
     # print(f"Metasys crawler {__version__}")
@@ -380,7 +382,8 @@ def flush():
 
 
 @cli.command()
-@click.option('--object-type', default=165, type=click.INT)
+@click.option('--object-type', default=165, type=click.INT,
+              help='Set the metasys object type (required, defaults to 165)')
 def objects(object_type):
     """Get the list of objects and stores them in the database for crawling."""
     base_url = os.environ['METASYS_BASEURL']
@@ -393,11 +396,13 @@ def objects(object_type):
 
 
 @cli.command()
-@click.option('--item-prefix', type=click.STRING)
+@click.option('--item-prefix', type=click.STRING, help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
+@click.option('--refresh', type=click.BOOL, help="The crawler won't refresh existing data unless told to")
 @click.option('--source', required=True,
               type=click.Choice(['objects', 'network-devices'],
-                                case_sensitive=False))
-def deep(item_prefix, source):
+                                case_sensitive=False), default='objects',
+              help='Should we scan objects (default) or network objects')
+def deep(item_prefix, source, refresh):
     """Do a deep crawl fetching every object taking the prefix into account. """
     base_url = os.environ['METASYS_BASEURL']
     username = os.environ['METASYS_USERNAME']
@@ -408,7 +413,7 @@ def deep(item_prefix, source):
         source_class = MetasysObject
     else:
         source_class = MetasysNetworkDevice
-    enrich_things(session, source_class, base_url, bearer, 2.0, item_prefix)
+    enrich_things(session, source_class, base_url, bearer, 2.0, item_prefix, refresh)
 
 
 @cli.command()
@@ -436,7 +441,7 @@ def count_object_types():
 
 
 @cli.command()
-@click.option('--item-prefix', type=click.STRING)
+@click.option('--item-prefix', type=click.STRING, help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
 def push(item_prefix):
     """Push cralwer data to the cloud."""
     dbsess = db_session()
@@ -445,7 +450,9 @@ def push(item_prefix):
 
 
 @cli.command()
-@click.option('--enumset', type=click.INT)
+@click.option('--enumset', type=click.INT,
+              help='Enumsets are used to add meaning to the "type" property from metasys. Get 507 and 508 - those are '
+                   'useful')
 def get_enumset(enumset: int):
     """Grabs an enumset from metasys and populates the local database with it."""
     base_url = os.environ['METASYS_BASEURL']
