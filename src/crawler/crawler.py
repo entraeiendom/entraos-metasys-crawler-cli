@@ -413,7 +413,7 @@ def deep(item_prefix, source, refresh):
         source_class = MetasysObject
     else:
         source_class = MetasysNetworkDevice
-    enrich_things(session, source_class, base_url, bearer, 2.0, item_prefix, refresh)
+    enrich_things(session, source_class, base_url, bearer, 2.0, refresh, item_prefix)
 
 
 @cli.command()
