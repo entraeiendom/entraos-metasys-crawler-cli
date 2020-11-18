@@ -212,19 +212,25 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
 
 def __metasysid_to_real_estate(metasysid: str) -> str:
     """Takes something like 'GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4'
-    and spits out 'kjorbo'"""
+    and spits out 'kjorbo'
+
+    This is a bit of a hack and it might make sense to store this in an external service
+    of some sort instead of in a dict inside like this.
+
+    """
 
     buildingmap = {
         'SOKP16': 'kjorbo',
         'SOKP14': 'kjorbo',
-        'SOKP22': 'kjorbo'
+        'SOKP22': 'kjorbo',
+        'SOKB16': 'kjorbo'
     }
     try:
         rx = re.compile('^([^:]+):([^-]+)')
         sd, building = rx.findall(metasysid)[0]
     except Exception as e:
         logging.error(f"Could not make sense of {metasysid}")
-        raise ValueError("Regular expression error")
+        raise ValueError("Regular expression error") from e
     return buildingmap[building]
 
 
@@ -245,13 +251,15 @@ def get_type_description(object_type: int) -> str:
     enumset = dbsess.query(EnumSet).filter_by(id=object_type).first()
     if not enumset.description:
         # Note that this will only fire off once per input as the result is cached.
-        logging.warning(f"No description found for type {object_type}")
+        logging.error(f"No description found for type {object_type}")
+        logging.error(f"Make sure you've fetched the enumsets from metasys (508 and 507)")
+        sys.exit(1)  # I consider this a fatal error.
     return enumset.description
 
 
-def push_object(session: sqlalchemy.orm.session.Session,
-                delay: float,
-                item_prefix: str = None) -> None:
+def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
+                        delay: float,
+                        item_prefix: str = None) -> None:
     """ Push things into the cloud."""
 
     try:
@@ -449,13 +457,14 @@ def network_devices():
 @cli.command()
 def count_object_types():
     """Iterate over the various object types and show the count.
-    Used for exploration.
+    Used for exploration. This can be used to populate the known_types
+    in the objects() function call above.
     """
     base_url = os.environ['METASYS_BASEURL']
     username = os.environ['METASYS_USERNAME']
     password = os.environ['METASYS_PASSWORD']
     bearer = BearerToken(base_url, username, password)
-    count_object_by_type(base_url, bearer, 0.2, 0, 2000)
+    count_object_by_type(base_url, bearer, 0.2, 0, 1000)
 
 
 @cli.command()
@@ -464,7 +473,7 @@ def push(item_prefix):
     """Push cralwer data to the cloud."""
     dbsess = db_session()
 
-    push_object(dbsess, 0.0, item_prefix)
+    push_objects_to_bas(dbsess, 0.0, item_prefix)
 
 
 @cli.command()
