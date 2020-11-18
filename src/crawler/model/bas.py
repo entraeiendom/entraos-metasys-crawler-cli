@@ -5,9 +5,9 @@ from datetime import datetime
 
 @dataclass
 class Bas:
-    id: uuid.UUID
+    id: str
     realEstate: str
-    parentId: uuid.UUID
+    parentId: str
     type: str
     discovered: datetime
     lastCrawl: datetime

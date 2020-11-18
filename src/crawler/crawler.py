@@ -337,7 +337,7 @@ def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.ses
         for item in json_response['items']:
             enumset_id = item['id']
             description = item['description']
-            db_item = EnumSet(id=enumset_id, description=description or "")
+            db_item = EnumSet(id=enumset_id, description=description or "", enumset=enumset)
             dbsess.merge(db_item)
             dbsess.commit()
 
@@ -382,22 +382,40 @@ def flush():
 
 
 @cli.command()
-@click.option('--object-type', default=165, type=click.INT,
-              help='Set the metasys object type (required, defaults to 165)')
+@click.option('--object-type', type=click.INT, required=False,
+              help='Only fetch object of type OBJECT-TYPE. If not set then we get all known types.')
 def objects(object_type):
-    """Get the list of objects and stores them in the database for crawling."""
+    """Get the list of objects and stores them in the database for crawling.
+    Pass the object type. This is an INTEGER. If no object type is given
+    then the script will grab all know object types.
+    """
+
+    # This is the current (Nov 2020) list of types in use I've seen.
+    known_types = [129, 130, 135, 137, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 155, 156, 161,
+                   165, 168, 172, 173, 176, 177, 178, 181, 185, 191, 192, 195, 197, 209, 227, 228, 229, 230, 249, 255,
+                   257, 263, 274, 275, 276, 277, 278, 286, 290, 292, 326, 327, 328, 329, 336, 337, 338, 340, 342, 343,
+                   344, 345, 348, 349, 350, 351, 352, 353, 354, 356, 357, 362, 425, 426, 427, 428, 429, 430, 431, 432,
+                   433, 500, 501, 502, 503, 504, 505, 508, 513, 514, 515, 516, 517, 519, 544, 599, 600, 601, 602, 603,
+                   604, 606, 608, 613, 651, 660, 661, 677, 694, 699, 719, 720, 748, 749, 758, 760, 761, 762, 763, 767,
+                   820, 828, 844, 847, 872, 907]
+
     base_url = os.environ['METASYS_BASEURL']
     username = os.environ['METASYS_USERNAME']
     password = os.environ['METASYS_PASSWORD']
     logging.info(f"Crawling objects with type {object_type}")
     bearer = BearerToken(base_url, username, password)
     dbsess = db_session()
-    get_objects(dbsess, base_url, bearer, object_type, 0.5)
+    if object_type:
+        get_objects(dbsess, base_url, bearer, object_type, 0.5)
+    else:
+        for object_type_from_known in known_types:
+            get_objects(dbsess, base_url, bearer, object_type_from_known, 0.5)
 
 
 @cli.command()
 @click.option('--item-prefix', type=click.STRING, help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
-@click.option('--refresh', type=click.BOOL, help="The crawler won't refresh existing data unless told to")
+@click.option('--refresh', type=click.BOOL,
+              help="The crawler won't refresh existing data unless told to", default=False)
 @click.option('--source', required=True,
               type=click.Choice(['objects', 'network-devices'],
                                 case_sensitive=False), default='objects',
@@ -450,9 +468,7 @@ def push(item_prefix):
 
 
 @cli.command()
-@click.option('--enumset', type=click.INT,
-              help='Enumsets are used to add meaning to the "type" property from metasys. Get 507 and 508 - those are '
-                   'useful')
+@click.argument('enumset', type=click.INT, nargs=1)
 def get_enumset(enumset: int):
     """Grabs an enumset from metasys and populates the local database with it."""
     base_url = os.environ['METASYS_BASEURL']
