@@ -152,11 +152,14 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
 
     item_objects = build_query.all()
 
-    logging.debug(f"Will crawl {len(item_objects)} objects...")
+    total_objects = len(item_objects)
+    objects_crawled = 0
     for item_object in item_objects:
-        logging.info(f"Enriching object {item_object.id} - {item_object.name}")
+        objects_crawled = objects_crawled + 1
+        logging.info(f"Enriching object {item_object.id} - {item_object.name} ({objects_crawled}/{total_objects})")
         enrich_single_thing(base_url, bearer, item_object)
         session.commit()  # Commit after each object. Implicit bail out.
+
         time.sleep(delay)
 
 
