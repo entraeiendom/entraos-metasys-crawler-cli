@@ -17,8 +17,8 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Editable
-# sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), 'src/crawler')))
+# Local modules. Fix the somewhat braindead import path...
+sys.path.insert(0, os.path.realpath(os.path.dirname(__file__)))
 
 from db.models import MetasysObject, MetasysNetworkDevice, EnumSet, Base
 from db.base import get_dsn
@@ -518,4 +518,4 @@ def get_enumset(enumset: int):
 # We are typically invoked with "poetry run crawler" which will run the cli()
 # function directly.
 if __name__ == '__main__':
-    cli(debug=True)
+    cli()
