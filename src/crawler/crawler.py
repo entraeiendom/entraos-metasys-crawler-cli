@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import sys
 import time
 import uuid
 from datetime import timezone, datetime
@@ -12,6 +13,7 @@ from functools import lru_cache
 import click
 import requests
 import sqlalchemy
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -22,6 +24,17 @@ from db.models import MetasysObject, MetasysNetworkDevice, EnumSet, Base
 from db.base import get_dsn
 from metasysauth.bearer import BearerToken
 from model.bas import Bas
+
+# Constants:
+
+REQUESTS_TIMEOUT = 30.0  # 30 second timeout on the requests sent.
+BUILDING_MAP = {
+    'SOKP16': 'kjorbo',
+    'SOKP14': 'kjorbo',
+    'SOKP22': 'kjorbo',
+    'SOKB16': 'kjorbo'
+}
+
 
 
 def db_engine() -> sqlalchemy.engine.Engine:
@@ -81,7 +94,7 @@ def get_objects(session: sqlalchemy.orm.session.Session, base_url: str,
     while True:
         resp = requests.get(base_url +
                             f"/objects?page={page}&type={object_type}&pageSize=1000&sort=name",
-                            auth=bearer)
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         json_response = resp.json()
         items = json_response["items"]
         logging.info(f"Working on page ({page} - {len(items)} items")
@@ -97,7 +110,8 @@ def get_objects(session: sqlalchemy.orm.session.Session, base_url: str,
 def enrich_single_thing(base_url: str, bearer: BearerToken, item_object: MetasysObject):
     """ Fetch a single object from Metasys and store the response. """
     try:
-        resp = requests.get(base_url + f"/objects/{item_object.id}", auth=bearer)
+        resp = requests.get(base_url + f"/objects/{item_object.id}",
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         item_object.lastCrawl = datetime.now(timezone.utc)
         item_object.response = resp.text
         item_object.successes += 1
@@ -107,19 +121,19 @@ def enrich_single_thing(base_url: str, bearer: BearerToken, item_object: Metasys
         logging.error(requests_exception)
 
 
+# This is the deep crawl. Might wanna try to cut down on the number of arguments.
 def enrich_things(session: sqlalchemy.orm.session.Session,
                   source_class: Base,
                   base_url: str,
                   bearer: BearerToken,
                   delay: float,
+                  refresh: bool,
                   item_prefix: str = None) -> None:
     """ Get a list of "things" we should enrich. Things can be anything with a UUID
     available through the /objects endpoint. Supply the class from the model of the thing you
     want to enrich.
     ATM we can query both the Objects and the Network Device tables. It needs a itemReference if
     we are to do filtering."""
-
-    only_new_items = True
 
     # We could perhaps  check source_class here, but that isn't pythonic. 🦆 ftw!
 
@@ -128,12 +142,12 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
     if item_prefix:
         build_query = build_query.filter(source_class.itemReference.like(item_prefix + '%'))
 
-    # Filter out stuff and don't like:
+    # Filter out stuff I don't like:
     build_query = build_query.filter(source_class.itemReference.notlike('%Programming%'))
-    build_query = build_query.filter(source_class.name.notlike('Trend%'))
+    build_query = build_query.filter(source_class.name.notlike('%Trend%'))
     build_query = build_query.filter(source_class.name.notlike('%Alarm%'))
 
-    if only_new_items:
+    if not refresh:
         build_query = build_query.filter(source_class.successes == 0)
 
     item_objects = build_query.all()
@@ -180,7 +194,7 @@ def get_network_devices(session: sqlalchemy.orm.session.Session,
     while True:
         resp = requests.get(base_url +
                             f"/networkDevices?page={page}&pageSize=100&sort=name",
-                            auth=bearer)
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         json_response = resp.json()
         items = json_response["items"]
         logging.info(f"Working on page ({page} - {len(items)} items")
@@ -201,7 +215,7 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
     for type_idx in range(start, finish):
         resp = requests.get(base_url +
                             f"/objects?type={type_idx}",
-                            auth=bearer)
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         json_resp = resp.json()
         total = json_resp["total"]
         if total > 0:
@@ -209,24 +223,24 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
         time.sleep(delay)
 
 
-def __metasysid_to_real_estate(metasysid: str) -> str:
-    """Takes something like 'GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4' and spits out 'kjorbo'"""
+def _metasysid_to_real_estate(metasysid: str) -> str:
+    """Takes something like 'GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4'
+    and spits out 'kjorbo' using BUILDING_MAP (dict)
 
-    buildingmap = {
-        'SOKP16': 'kjorbo',
-        'SOKP14': 'kjorbo',
-        'SOKP22': 'kjorbo'
-    }
+    This is used when we push data into the Bas API.
+
+    """
+
     try:
         rx = re.compile('^([^:]+):([^-]+)')
         sd, building = rx.findall(metasysid)[0]
     except Exception as e:
         logging.error(f"Could not make sense of {metasysid}")
-        raise ValueError("Regular expression error")
-    return buildingmap[building]
+        raise ValueError("Regular expression error") from e
+    return BUILDING_MAP[building]
 
 
-def __json_converter(whatever):
+def _json_converter(whatever) -> str:
     """Helper to match various types into something that the JSON lib can grok."""
     if isinstance(whatever, datetime):
         return whatever.utcnow().isoformat() + 'Z'  # somewhat of a hack.
@@ -243,26 +257,40 @@ def get_type_description(object_type: int) -> str:
     enumset = dbsess.query(EnumSet).filter_by(id=object_type).first()
     if not enumset.description:
         # Note that this will only fire off once per input as the result is cached.
-        logging.warning(f"No description found for type {object_type}")
+        logging.error(f"No description found for type {object_type}")
+        logging.error(f"Make sure you've fetched the enumsets from metasys (508 and 507)")
+        sys.exit(1)  # I consider this a fatal error.
     return enumset.description
 
 
-def push_object(session: sqlalchemy.orm.session.Session,
-                delay: float,
-                item_prefix: str = None) -> None:
+def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
+                        delay: float,
+                        item_prefix: str = None,
+                        real_estate: str = None) -> None:
     """ Push things into the cloud."""
+
+    inverted_building_map = {}
+    # Invert the building map so we can get all ID's that make up a real estate
+    # This is used whenever --real-estate is specified.
+    for k, v in BUILDING_MAP.items():
+        inverted_building_map[v] = inverted_building_map.get(v, []) + [k]
 
     try:
         base_url = os.getenv('ENTRAOS_BAS_BASEURL')
     except KeyError:
         logging.error("Environment variable ENTRAOS_BAS_BASEURL is not set")
-        quit(1)
+        sys.exit(1)
 
     build_query = session.query(MetasysObject)
 
-    # If we wanna qualify the query further do it like this:
-    if item_prefix:
-        build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + '%'))
+    if real_estate:   # if we wanna upload a whole real estate....
+        # iterate over the 'buildings' in the real estate.....
+        for building in inverted_building_map[real_estate]:
+            build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + building + '%'))
+    else:
+        if item_prefix:
+            # If we wanna qualify the query further do it like this:
+            build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + '%'))
 
     for item in build_query.all():
         logging.debug(f'Processing {item.id}')
@@ -279,7 +307,8 @@ def push_object(session: sqlalchemy.orm.session.Session,
         # Parse the response. We need to make sure it looks ok and we wanna get some data from it.
         json_resp_dict = json.loads(item_as_dict['response'])
         if 'message' in json_resp_dict:
-            logging.warning(f'JSON response {item.id} has a message. Ignoring. Message: "{json_resp_dict["message"]}"')
+            logging.warning(f'JSON response {item.id} has a message. '
+                            f'Ignoring. Message: "{json_resp_dict["message"]}"')
             continue
         #
 
@@ -293,11 +322,10 @@ def push_object(session: sqlalchemy.orm.session.Session,
         item_as_dict['type'] = get_type_description(item_as_dict['type'])
 
         #  do stuff that the API requires
-        item_as_dict['realEstate'] = __metasysid_to_real_estate(item.itemReference)
+        item_as_dict['realEstate'] = _metasysid_to_real_estate(item.itemReference)
         item_as_dict['tfm'] = item_as_dict['name']
         item_as_dict['description'] = json_resp_dict['item']['description']
         realestate_id = item_as_dict['realEstate']
-
 
         try:
             bas_object = Bas(**item_as_dict)
@@ -306,11 +334,11 @@ def push_object(session: sqlalchemy.orm.session.Session,
             continue
         # Dict --> JSON with customer encoder:
         # requests doesn't support supplying an encoder so we have to do this in two steps.
-        json_data = json.dumps(item_as_dict, default=__json_converter)
+        json_data = json.dumps(item_as_dict, default=_json_converter)
 
         resp = requests.post(f'{base_url}/metadata/bas/realestate/{realestate_id}',
                              headers={'Content-Type': 'application/json'},
-                             data=json_data)
+                             data=json_data, timeout=REQUESTS_TIMEOUT)
 
         resp.raise_for_status()  # Bail on error.
 
@@ -325,17 +353,20 @@ def push_object(session: sqlalchemy.orm.session.Session,
 
 def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.session.Session,
                   enumset: int, delay: float) -> None:
+    """This function gets invoked when running crawler enumset and it grabs the enumsets.
+    These are used to translate the type field into a somewhat meaningful string.
+    """
     page = 1
     while True:
         resp = requests.get(base_url + f'/enumSets/{enumset}/members?page={page}&pageSize=1000',
-                            auth=bearer)
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         resp.raise_for_status()
 
         json_response = resp.json()
         for item in json_response['items']:
-            id = item['id']
+            enumset_id = item['id']
             description = item['description']
-            db_item = EnumSet(id=id, description=description or "", enumset=enumset)
+            db_item = EnumSet(id=enumset_id, description=description or "", enumset=enumset)
             dbsess.merge(db_item)
             dbsess.commit()
 
@@ -350,7 +381,7 @@ def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.ses
 #
 
 @click.group()
-@click.option('--debug/--no-debug', default=False)
+@click.option('--debug/--no-debug', default=False, help='Set log level to DEBUG.')
 def cli(debug):
     """ Crawler CLI for the Metasys API """
     # print(f"Metasys crawler {__version__}")
@@ -363,7 +394,6 @@ def cli(debug):
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     try:
-        from dotenv import load_dotenv  # pylint: disable=wrong-import-position
         load_dotenv()
         logging.info('.env loaded')
     except ModuleNotFoundError:
@@ -380,24 +410,48 @@ def flush():
 
 
 @cli.command()
-@click.option('--object-type', default=165, type=click.INT)
+@click.option('--object-type', type=click.INT, required=False,
+              help='Only fetch object of type OBJECT-TYPE. If not set then we get all known types.')
 def objects(object_type):
-    """Get the list of objects and stores them in the database for crawling."""
+    """Get the list of objects and stores them in the database for crawling.
+    Pass the object type. This is an INTEGER. If no object type is given
+    then the script will grab all know object types.
+    """
+
+    # This is the current (Nov 2020) list of types in use I've seen.
+    known_types = [129, 130, 135, 137, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151,
+                   152, 153, 155, 156, 161, 165, 168, 172, 173, 176, 177, 178, 181, 185, 191,
+                   192, 195, 197, 209, 227, 228, 229, 230, 249, 255, 257, 263, 274, 275, 276,
+                   277, 278, 286, 290, 292, 326, 327, 328, 329, 336, 337, 338, 340, 342, 343,
+                   344, 345, 348, 349, 350, 351, 352, 353, 354, 356, 357, 362, 425, 426, 427,
+                   428, 429, 430, 431, 432, 433, 500, 501, 502, 503, 504, 505, 508, 513, 514,
+                   515, 516, 517, 519, 544, 599, 600, 601, 602, 603, 604, 606, 608, 613, 651,
+                   660, 661, 677, 694, 699, 719, 720, 748, 749, 758, 760, 761, 762, 763, 767,
+                   820, 828, 844, 847, 872, 907]
+
     base_url = os.environ['METASYS_BASEURL']
     username = os.environ['METASYS_USERNAME']
     password = os.environ['METASYS_PASSWORD']
     logging.info(f"Crawling objects with type {object_type}")
     bearer = BearerToken(base_url, username, password)
     dbsess = db_session()
-    get_objects(dbsess, base_url, bearer, object_type, 0.5)
+    if object_type:
+        get_objects(dbsess, base_url, bearer, object_type, 0.5)
+    else:
+        for object_type_from_known in known_types:
+            get_objects(dbsess, base_url, bearer, object_type_from_known, 0.5)
 
 
 @cli.command()
-@click.option('--item-prefix', type=click.STRING)
+@click.option('--item-prefix', type=click.STRING,
+              help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
+@click.option('--refresh', type=click.BOOL,
+              help="The crawler won't refresh existing data unless told to", default=False)
 @click.option('--source', required=True,
               type=click.Choice(['objects', 'network-devices'],
-                                case_sensitive=False))
-def deep(item_prefix, source):
+                                case_sensitive=False), default='objects',
+              help='Should we scan objects (default) or network objects')
+def deep(item_prefix, source, refresh):
     """Do a deep crawl fetching every object taking the prefix into account. """
     base_url = os.environ['METASYS_BASEURL']
     username = os.environ['METASYS_USERNAME']
@@ -408,7 +462,7 @@ def deep(item_prefix, source):
         source_class = MetasysObject
     else:
         source_class = MetasysNetworkDevice
-    enrich_things(session, source_class, base_url, bearer, 2.0, item_prefix)
+    enrich_things(session, source_class, base_url, bearer, 2.0, refresh, item_prefix)
 
 
 @cli.command()
@@ -426,26 +480,30 @@ def network_devices():
 @cli.command()
 def count_object_types():
     """Iterate over the various object types and show the count.
-    Used for exploration.
+    Used for exploration. This can be used to populate the known_types
+    in the objects() function call above.
     """
     base_url = os.environ['METASYS_BASEURL']
     username = os.environ['METASYS_USERNAME']
     password = os.environ['METASYS_PASSWORD']
     bearer = BearerToken(base_url, username, password)
-    count_object_by_type(base_url, bearer, 0.2, 0, 2000)
+    count_object_by_type(base_url, bearer, 0.2, 0, 1000)
 
 
 @cli.command()
-@click.option('--item-prefix', type=click.STRING)
-def push(item_prefix):
+@click.option('--item-prefix', type=click.STRING,
+              help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
+@click.option('--real-estate', type=click.STRING,
+              help='Upload a realestate to Bas. Can be "kjorbo" for those buildings.')
+def push(item_prefix: str, real_estate: str):
     """Push cralwer data to the cloud."""
     dbsess = db_session()
 
-    push_object(dbsess, 0.0, item_prefix)
+    push_objects_to_bas(dbsess, 0.0, item_prefix, real_estate)
 
 
 @cli.command()
-@click.option('--enumset', type=click.INT)
+@click.argument('enumset', type=click.INT, nargs=1)
 def get_enumset(enumset: int):
     """Grabs an enumset from metasys and populates the local database with it."""
     base_url = os.environ['METASYS_BASEURL']
@@ -456,5 +514,8 @@ def get_enumset(enumset: int):
     grab_enumsets(base_url, bearer, dbsess, enumset, 1.0)
 
 
+# We typically won't be invoked like this, but if we do we set debug=True
+# We are typically invoked with "poetry run crawler" which will run the cli()
+# function directly.
 if __name__ == '__main__':
-    cli()
+    cli(debug=True)

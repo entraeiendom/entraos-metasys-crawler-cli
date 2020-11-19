@@ -1,3 +1,5 @@
+""" Dataclass object for the BAS API"""     # pylint: disable=invalid-name
+
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -5,9 +7,9 @@ from datetime import datetime
 
 @dataclass
 class Bas:
-    id: uuid.UUID
+    id: str
     realEstate: str
-    parentId: uuid.UUID
+    parentId: str
     type: str
     discovered: datetime
     lastCrawl: datetime
