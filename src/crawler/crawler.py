@@ -13,6 +13,7 @@ from functools import lru_cache
 import click
 import requests
 import sqlalchemy
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -23,6 +24,17 @@ from db.models import MetasysObject, MetasysNetworkDevice, EnumSet, Base
 from db.base import get_dsn
 from metasysauth.bearer import BearerToken
 from model.bas import Bas
+
+# Constants:
+
+REQUESTS_TIMEOUT = 30.0  # 30 second timeout on the requests sent.
+BUILDING_MAP = {
+    'SOKP16': 'kjorbo',
+    'SOKP14': 'kjorbo',
+    'SOKP22': 'kjorbo',
+    'SOKB16': 'kjorbo'
+}
+
 
 
 def db_engine() -> sqlalchemy.engine.Engine:
@@ -82,7 +94,7 @@ def get_objects(session: sqlalchemy.orm.session.Session, base_url: str,
     while True:
         resp = requests.get(base_url +
                             f"/objects?page={page}&type={object_type}&pageSize=1000&sort=name",
-                            auth=bearer)
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         json_response = resp.json()
         items = json_response["items"]
         logging.info(f"Working on page ({page} - {len(items)} items")
@@ -98,7 +110,8 @@ def get_objects(session: sqlalchemy.orm.session.Session, base_url: str,
 def enrich_single_thing(base_url: str, bearer: BearerToken, item_object: MetasysObject):
     """ Fetch a single object from Metasys and store the response. """
     try:
-        resp = requests.get(base_url + f"/objects/{item_object.id}", auth=bearer)
+        resp = requests.get(base_url + f"/objects/{item_object.id}",
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         item_object.lastCrawl = datetime.now(timezone.utc)
         item_object.response = resp.text
         item_object.successes += 1
@@ -108,7 +121,7 @@ def enrich_single_thing(base_url: str, bearer: BearerToken, item_object: Metasys
         logging.error(requests_exception)
 
 
-# This is the deep crawl.
+# This is the deep crawl. Might wanna try to cut down on the number of arguments.
 def enrich_things(session: sqlalchemy.orm.session.Session,
                   source_class: Base,
                   base_url: str,
@@ -181,7 +194,7 @@ def get_network_devices(session: sqlalchemy.orm.session.Session,
     while True:
         resp = requests.get(base_url +
                             f"/networkDevices?page={page}&pageSize=100&sort=name",
-                            auth=bearer)
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         json_response = resp.json()
         items = json_response["items"]
         logging.info(f"Working on page ({page} - {len(items)} items")
@@ -202,7 +215,7 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
     for type_idx in range(start, finish):
         resp = requests.get(base_url +
                             f"/objects?type={type_idx}",
-                            auth=bearer)
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         json_resp = resp.json()
         total = json_resp["total"]
         if total > 0:
@@ -210,31 +223,24 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
         time.sleep(delay)
 
 
-def __metasysid_to_real_estate(metasysid: str) -> str:
+def _metasysid_to_real_estate(metasysid: str) -> str:
     """Takes something like 'GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4'
-    and spits out 'kjorbo'
+    and spits out 'kjorbo' using BUILDING_MAP (dict)
 
-    This is a bit of a hack and it might make sense to store this in an external service
-    of some sort instead of in a dict inside like this.
+    This is used when we push data into the Bas API.
 
     """
 
-    buildingmap = {
-        'SOKP16': 'kjorbo',
-        'SOKP14': 'kjorbo',
-        'SOKP22': 'kjorbo',
-        'SOKB16': 'kjorbo'
-    }
     try:
         rx = re.compile('^([^:]+):([^-]+)')
         sd, building = rx.findall(metasysid)[0]
     except Exception as e:
         logging.error(f"Could not make sense of {metasysid}")
         raise ValueError("Regular expression error") from e
-    return buildingmap[building]
+    return BUILDING_MAP[building]
 
 
-def __json_converter(whatever):
+def _json_converter(whatever) -> str:
     """Helper to match various types into something that the JSON lib can grok."""
     if isinstance(whatever, datetime):
         return whatever.utcnow().isoformat() + 'Z'  # somewhat of a hack.
@@ -259,8 +265,15 @@ def get_type_description(object_type: int) -> str:
 
 def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
                         delay: float,
-                        item_prefix: str = None) -> None:
+                        item_prefix: str = None,
+                        real_estate: str = None) -> None:
     """ Push things into the cloud."""
+
+    inverted_building_map = {}
+    # Invert the building map so we can get all ID's that make up a real estate
+    # This is used whenever --real-estate is specified.
+    for k, v in BUILDING_MAP.items():
+        inverted_building_map[v] = inverted_building_map.get(v, []) + [k]
 
     try:
         base_url = os.getenv('ENTRAOS_BAS_BASEURL')
@@ -270,9 +283,14 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
 
     build_query = session.query(MetasysObject)
 
-    # If we wanna qualify the query further do it like this:
-    if item_prefix:
-        build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + '%'))
+    if real_estate:   # if we wanna upload a whole real estate....
+        # iterate over the 'buildings' in the real estate.....
+        for building in inverted_building_map[real_estate]:
+            build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + building + '%'))
+    else:
+        if item_prefix:
+            # If we wanna qualify the query further do it like this:
+            build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + '%'))
 
     for item in build_query.all():
         logging.debug(f'Processing {item.id}')
@@ -304,7 +322,7 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
         item_as_dict['type'] = get_type_description(item_as_dict['type'])
 
         #  do stuff that the API requires
-        item_as_dict['realEstate'] = __metasysid_to_real_estate(item.itemReference)
+        item_as_dict['realEstate'] = _metasysid_to_real_estate(item.itemReference)
         item_as_dict['tfm'] = item_as_dict['name']
         item_as_dict['description'] = json_resp_dict['item']['description']
         realestate_id = item_as_dict['realEstate']
@@ -316,11 +334,11 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
             continue
         # Dict --> JSON with customer encoder:
         # requests doesn't support supplying an encoder so we have to do this in two steps.
-        json_data = json.dumps(item_as_dict, default=__json_converter)
+        json_data = json.dumps(item_as_dict, default=_json_converter)
 
         resp = requests.post(f'{base_url}/metadata/bas/realestate/{realestate_id}',
                              headers={'Content-Type': 'application/json'},
-                             data=json_data)
+                             data=json_data, timeout=REQUESTS_TIMEOUT)
 
         resp.raise_for_status()  # Bail on error.
 
@@ -335,10 +353,13 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
 
 def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.session.Session,
                   enumset: int, delay: float) -> None:
+    """This function gets invoked when running crawler enumset and it grabs the enumsets.
+    These are used to translate the type field into a somewhat meaningful string.
+    """
     page = 1
     while True:
         resp = requests.get(base_url + f'/enumSets/{enumset}/members?page={page}&pageSize=1000',
-                            auth=bearer)
+                            auth=bearer, timeout=REQUESTS_TIMEOUT)
         resp.raise_for_status()
 
         json_response = resp.json()
@@ -373,7 +394,6 @@ def cli(debug):
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     try:
-        from dotenv import load_dotenv  # pylint: disable=wrong-import-position
         load_dotenv()
         logging.info('.env loaded')
     except ModuleNotFoundError:
@@ -399,12 +419,14 @@ def objects(object_type):
     """
 
     # This is the current (Nov 2020) list of types in use I've seen.
-    known_types = [129, 130, 135, 137, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 155, 156, 161,
-                   165, 168, 172, 173, 176, 177, 178, 181, 185, 191, 192, 195, 197, 209, 227, 228, 229, 230, 249, 255,
-                   257, 263, 274, 275, 276, 277, 278, 286, 290, 292, 326, 327, 328, 329, 336, 337, 338, 340, 342, 343,
-                   344, 345, 348, 349, 350, 351, 352, 353, 354, 356, 357, 362, 425, 426, 427, 428, 429, 430, 431, 432,
-                   433, 500, 501, 502, 503, 504, 505, 508, 513, 514, 515, 516, 517, 519, 544, 599, 600, 601, 602, 603,
-                   604, 606, 608, 613, 651, 660, 661, 677, 694, 699, 719, 720, 748, 749, 758, 760, 761, 762, 763, 767,
+    known_types = [129, 130, 135, 137, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151,
+                   152, 153, 155, 156, 161, 165, 168, 172, 173, 176, 177, 178, 181, 185, 191,
+                   192, 195, 197, 209, 227, 228, 229, 230, 249, 255, 257, 263, 274, 275, 276,
+                   277, 278, 286, 290, 292, 326, 327, 328, 329, 336, 337, 338, 340, 342, 343,
+                   344, 345, 348, 349, 350, 351, 352, 353, 354, 356, 357, 362, 425, 426, 427,
+                   428, 429, 430, 431, 432, 433, 500, 501, 502, 503, 504, 505, 508, 513, 514,
+                   515, 516, 517, 519, 544, 599, 600, 601, 602, 603, 604, 606, 608, 613, 651,
+                   660, 661, 677, 694, 699, 719, 720, 748, 749, 758, 760, 761, 762, 763, 767,
                    820, 828, 844, 847, 872, 907]
 
     base_url = os.environ['METASYS_BASEURL']
@@ -421,7 +443,8 @@ def objects(object_type):
 
 
 @cli.command()
-@click.option('--item-prefix', type=click.STRING, help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
+@click.option('--item-prefix', type=click.STRING,
+              help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
 @click.option('--refresh', type=click.BOOL,
               help="The crawler won't refresh existing data unless told to", default=False)
 @click.option('--source', required=True,
@@ -468,12 +491,15 @@ def count_object_types():
 
 
 @cli.command()
-@click.option('--item-prefix', type=click.STRING, help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
-def push(item_prefix):
+@click.option('--item-prefix', type=click.STRING,
+              help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
+@click.option('--real-estate', type=click.STRING,
+              help='Upload a realestate to Bas. Can be "kjorbo" for those buildings.')
+def push(item_prefix: str, real_estate: str):
     """Push cralwer data to the cloud."""
     dbsess = db_session()
 
-    push_objects_to_bas(dbsess, 0.0, item_prefix)
+    push_objects_to_bas(dbsess, 0.0, item_prefix, real_estate)
 
 
 @cli.command()
@@ -488,5 +514,8 @@ def get_enumset(enumset: int):
     grab_enumsets(base_url, bearer, dbsess, enumset, 1.0)
 
 
+# We typically won't be invoked like this, but if we do we set debug=True
+# We are typically invoked with "poetry run crawler" which will run the cli()
+# function directly.
 if __name__ == '__main__':
-    cli()
+    cli(debug=True)

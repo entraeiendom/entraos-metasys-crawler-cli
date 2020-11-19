@@ -1,7 +1,6 @@
 """Database objects for the crawler. """
 
 from sqlalchemy import Column, Integer, String, DateTime, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -28,7 +27,7 @@ class MetasysObject(Base):  # pylint: disable=too-few-public-methods
     itemReference = Column(String, nullable=True)
     lastSync = Column(DateTime, nullable=True)
 
-    def as_dict(self, excluded_keys: dict = {}) -> dict:
+    def as_dict(self, excluded_keys: dict) -> dict:
         """ Returns a dict with copies of the data in the object.
         Populate the _excluded_keys to omit
         """
@@ -37,7 +36,8 @@ class MetasysObject(Base):  # pylint: disable=too-few-public-methods
             (key, value)
             for (key, value) in self.__dict__.items()
             if key not in excluded_keys
-            )
+        )
+
 
 class MetasysNetworkDevice(Base):  # pylint: disable=too-few-public-methods
     """ This is where we store the Network Devices we find in the crawl.
@@ -58,6 +58,8 @@ class MetasysNetworkDevice(Base):  # pylint: disable=too-few-public-methods
     # Included for convenience:
     name = Column(String, nullable=True)
     itemReference = Column(String, nullable=True)
+
+
 #
 #
 

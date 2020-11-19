@@ -1,3 +1,5 @@
+""" Dataclass object for the BAS API"""     # pylint: disable=invalid-name
+
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
