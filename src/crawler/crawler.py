@@ -22,7 +22,8 @@ sys.path.insert(0, os.path.realpath(os.path.dirname(__file__)))
 
 from db.models import MetasysObject, MetasysNetworkDevice, EnumSet, Base
 from db.base import get_dsn
-from metasysauth.bearer import BearerToken
+from auth.metasysbearer import BearerToken
+from auth.entrasso import EntraSSOToken
 from model.bas import Bas
 
 # Constants:
@@ -32,7 +33,8 @@ BUILDING_MAP = {
     'SOKP16': 'kjorbo',
     'SOKP14': 'kjorbo',
     'SOKP22': 'kjorbo',
-    'SOKB16': 'kjorbo'
+    'SOKB16': 'kjorbo',
+    'OSBG14': 'postgirobygget'
 }
 
 
@@ -295,6 +297,11 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
             # If we wanna qualify the query further do it like this:
             build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + '%'))
 
+    # Query is done. Let's create an auth driver.
+
+    entrasso = EntraSSOToken()
+    entrasso.login()   # fetches info from environment variables
+
     for item in build_query.all():
         logging.debug(f'Processing {item.id}')
         if item.successes == 0:
@@ -341,7 +348,8 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
 
         resp = requests.post(f'{base_url}/metadata/bas/realestate/{realestate_id}',
                              headers={'Content-Type': 'application/json'},
-                             data=json_data, timeout=REQUESTS_TIMEOUT)
+                             data=json_data, timeout=REQUESTS_TIMEOUT,
+                             auth=entrasso)
 
         resp.raise_for_status()  # Bail on error.
 
