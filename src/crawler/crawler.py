@@ -138,16 +138,17 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
 
     # We could perhaps  check source_class here, but that isn't pythonic. 🦆 ftw!
 
+
+
     build_query = session.query(source_class)
+
+
 
     if item_prefix:
         build_query = build_query.filter(source_class.itemReference.like(item_prefix + '%'))
 
+    # Todo: This is all broken.
     # Filter out stuff I don't like:
-    build_query = build_query.filter(source_class.itemReference.notlike('%Programming%'))
-    build_query = build_query.filter(source_class.name.notlike('%Trend%'))
-    build_query = build_query.filter(source_class.name.notlike('%Alarm%'))
-
     if not refresh:
         build_query = build_query.filter(source_class.successes == 0)
 
@@ -325,11 +326,15 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
         #  transform type into something meaningful
         item_as_dict['type'] = get_type_description(item_as_dict['type'])
 
-        #  do stuff that the API requires
-        item_as_dict['realEstate'] = _metasysid_to_real_estate(item.itemReference)
-        item_as_dict['tfm'] = item_as_dict['name']
-        item_as_dict['description'] = json_resp_dict['item']['description']
-        realestate_id = item_as_dict['realEstate']
+        #  do stuff that the API requires - this will fail if the response is braindamanged (404?) so we try
+        try:
+            item_as_dict['realEstate'] = _metasysid_to_real_estate(item.itemReference)
+            item_as_dict['tfm'] = item_as_dict['name']
+            item_as_dict['description'] = json_resp_dict['item']['description']
+            realestate_id = item_as_dict['realEstate']
+        except TypeError:
+            logging.warning(f'Could not make sense of object {item.id} - skipping')
+            continue
 
         try:
             bas_object = Bas(**item_as_dict)
