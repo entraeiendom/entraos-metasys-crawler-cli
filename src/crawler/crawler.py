@@ -280,7 +280,8 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
     if item_prefix:
         query = session.query(MetasysObject).filter(and_(
             MetasysObject.successes > 0,
-            MetasysObject.itemReference.like(item_prefix + '%')
+            MetasysObject.itemReference.like(item_prefix + '%'),
+            MetasysObject.lastSync == None  # hack. Only upload data which hasn't been upload. # Todo: Make parameter.
         ))
     else:
         query = session.query(MetasysObject).filter(MetasysObject.successes > 0)
