@@ -132,27 +132,25 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
                   item_prefix: str = None) -> None:
     """ Get a list of "things" we should enrich. Things can be anything with a UUID
     available through the /objects endpoint. Supply the class from the model of the thing you
-    want to enrich.
+    want to enrich. Typically objects or network devices....
+
     ATM we can query both the Objects and the Network Device tables. It needs a itemReference if
     we are to do filtering."""
 
     # We could perhaps  check source_class here, but that isn't pythonic. 🦆 ftw!
 
-
-
-    build_query = session.query(source_class)
-
-
-
     if item_prefix:
-        build_query = build_query.filter(source_class.itemReference.like(item_prefix + '%'))
+        if refresh:
+            query = session.query(source_class).filter(source_class.itemReference.like(item_prefix + '%'))
+        else:
+            query = session.query(source_class).filter(and_(
+                source_class.itemReference.like(item_prefix + '%'),
+                source_class.successes == 0
+            ))
+    else:
+        query = session.query(source_class)
 
-    # Todo: This is all broken.
-    # Filter out stuff I don't like:
-    if not refresh:
-        build_query = build_query.filter(source_class.successes == 0)
-
-    item_objects = build_query.all()
+    item_objects = query.all()
 
     total_objects = len(item_objects)
     objects_crawled = 0
@@ -310,7 +308,11 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
         item_as_dict = item.as_dict({'_sa_instance_state': True, 'lastSync': True})
 
         # Parse the response. We need to make sure it looks ok and we wanna get some data from it.
-        json_resp_dict = json.loads(item_as_dict['response'])
+        try:
+            json_resp_dict = json.loads(item_as_dict['response'])
+        except:
+            logging.warning(f'Could not parse JSON for {item.id}')
+            continue
         if 'message' in json_resp_dict:
             logging.warning(f'JSON response {item.id} has a message. '
                             f'Ignoring. Message: "{json_resp_dict["message"]}"')
