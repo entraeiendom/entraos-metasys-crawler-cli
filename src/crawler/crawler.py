@@ -288,6 +288,9 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
 
     build_query = session.query(MetasysObject)
 
+    # This is a good example on how to add qualifications to a Alchemy query...
+    build_query = build_query.filter(MetasysObject.successes > 1)
+
     if real_estate:   # if we wanna upload a whole real estate....
         # iterate over the 'buildings' in the real estate.....
         for building in inverted_building_map[real_estate]:
@@ -304,7 +307,7 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
 
     for item in build_query.all():
         logging.debug(f'Processing {item.id}')
-        if item.successes == 0:
+        if item.successes == 0:   # this should be moot, it is already baked into the query. Doesn't hurt, though.
             logging.debug(f'Ignoring item {item.id} which has not been crawled')
             continue
         if item.response is None:
