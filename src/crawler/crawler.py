@@ -26,17 +26,10 @@ from auth.metasysbearer import BearerToken
 from auth.entrasso import EntraSSOToken
 from model.bas import Bas
 
+from .buildingmap import BUILDING_MAP
 # Constants:
 
 REQUESTS_TIMEOUT = 30.0  # 30 second timeout on the requests sent.
-BUILDING_MAP = {
-    'SOKP16': 'kjorbo',
-    'SOKP14': 'kjorbo',
-    'SOKP22': 'kjorbo',
-    'SOKB16': 'kjorbo',
-    'OSBG14': 'postgirobygget'
-}
-
 
 def db_engine() -> sqlalchemy.engine.Engine:
     """ Acquire a database engine. Mostly used by session.
@@ -108,11 +101,31 @@ def get_objects(session: sqlalchemy.orm.session.Session, base_url: str,
         time.sleep(delay)
 
 
+def validate_metasys_object(response: str):
+    """Validate that the JSON we get is valid JSON and doesn't
+    contain errors.
+
+    Throws ValueError upon failure. The JSON parser might also throw errors.
+    """
+
+    j = json(response)
+    if not 'item' in j:
+        raise ValueError('No item in reponse')
+    if 'message' in j:
+        raise ValueError('Error message found in response')
+
+
 def enrich_single_thing(base_url: str, bearer: BearerToken, item_object: MetasysObject):
-    """ Fetch a single object from Metasys and store the response. """
+    """ Fetch a single object from Metasys and store the response.
+    Note that this modifies the DBO object we've been handled and
+    we expect the caller to commit() these changes at some point
+    if you wanna persist them.
+
+    """
     try:
         resp = requests.get(base_url + f"/objects/{item_object.id}",
                             auth=bearer, timeout=REQUESTS_TIMEOUT)
+        validate_metasys_object(resp.text)  # Validate the response. Throws exceptions.
         item_object.lastCrawl = datetime.now(timezone.utc)
         item_object.response = resp.text
         item_object.successes += 1
@@ -120,6 +133,10 @@ def enrich_single_thing(base_url: str, bearer: BearerToken, item_object: Metasys
         item_object.lastError = datetime.now(timezone.utc)
         item_object.errors += 1
         logging.error(requests_exception)
+    except Exception as response_exception:
+        item_object.lastError = datetime.now(timezone.utc)
+        item_object.errors += 1
+        logging.error(response_exception)
 
 
 # This is the deep crawl. Might wanna try to cut down on the number of arguments.
@@ -499,7 +516,7 @@ def count_object_types():
               help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
 @click.option('--real-estate', type=click.STRING,
               help='Upload a realestate to Bas. Can be "kjorbo" for those buildings.'
-              'Supply a item prefix like GP-SXD9E-113: for this to work.')
+                   'Supply a item prefix like GP-SXD9E-113: for this to work.')
 def push(item_prefix: str, real_estate: str):
     """Push cralwer data to the cloud."""
     dbsess = db_session()
