@@ -14,7 +14,7 @@ import click
 import requests
 import sqlalchemy
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, and_
 from sqlalchemy.orm import sessionmaker
 
 # Local modules. Fix the somewhat braindead import path...
@@ -36,7 +36,6 @@ BUILDING_MAP = {
     'SOKB16': 'kjorbo',
     'OSBG14': 'postgirobygget'
 }
-
 
 
 def db_engine() -> sqlalchemy.engine.Engine:
@@ -270,15 +269,8 @@ def get_type_description(object_type: int) -> str:
 
 def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
                         delay: float,
-                        item_prefix: str = None,
-                        real_estate: str = None) -> None:
+                        item_prefix: str = None) -> None:
     """ Push things into the cloud."""
-
-    inverted_building_map = {}
-    # Invert the building map so we can get all ID's that make up a real estate
-    # This is used whenever --real-estate is specified.
-    for k, v in BUILDING_MAP.items():
-        inverted_building_map[v] = inverted_building_map.get(v, []) + [k]
 
     try:
         base_url = os.getenv('ENTRAOS_BAS_BASEURL')
@@ -286,28 +278,27 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
         logging.error("Environment variable ENTRAOS_BAS_BASEURL is not set")
         sys.exit(1)
 
-    build_query = session.query(MetasysObject)
-
-    # This is a good example on how to add qualifications to a Alchemy query...
-    build_query = build_query.filter(MetasysObject.successes > 1)
-
-    if real_estate:   # if we wanna upload a whole real estate....
-        # iterate over the 'buildings' in the real estate.....
-        for building in inverted_building_map[real_estate]:
-            build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + building + '%'))
+    if item_prefix:
+        query = session.query(MetasysObject).filter(and_(
+            MetasysObject.successes > 0,
+            MetasysObject.itemReference.like(item_prefix + '%')
+        ))
     else:
-        if item_prefix:
-            # If we wanna qualify the query further do it like this:
-            build_query = build_query.filter(MetasysObject.itemReference.like(item_prefix + '%'))
+        query = session.query(MetasysObject).filter(MetasysObject.successes > 0)
 
     # Query is done. Let's create an auth driver.
 
     entrasso = EntraSSOToken()
-    entrasso.login()   # fetches info from environment variables
+    entrasso.login()  # fetches info from environment variables
 
-    for item in build_query.all():
+    resultset = query.all()
+    no_of_objects = len(resultset)
+    objects_uploaded = 0
+    logging.info(f'Database found {no_of_objects} to upload')
+
+    for item in query.all():
         logging.debug(f'Processing {item.id}')
-        if item.successes == 0:   # this should be moot, it is already baked into the query. Doesn't hurt, though.
+        if item.successes == 0:  # this should be moot, it is already baked into the query. Doesn't hurt, though.
             logging.debug(f'Ignoring item {item.id} which has not been crawled')
             continue
         if item.response is None:
@@ -355,8 +346,8 @@ def push_objects_to_bas(session: sqlalchemy.orm.session.Session,
                              auth=entrasso)
 
         resp.raise_for_status()  # Bail on error.
-
-        logging.debug(f'{item.id} uploaded')
+        objects_uploaded = objects_uploaded + 1
+        logging.info(f'{item.id} uploaded ({objects_uploaded}/{no_of_objects})')
         # quit(0)
         # Not catching errors here. Abort on failure.
         item.lastSync = datetime.now(tz=timezone.utc)
@@ -412,15 +403,6 @@ def cli(debug):
         logging.info('.env loaded')
     except ModuleNotFoundError:
         logging.warning("Dotenv not found. Assuming the environment is set up.")
-
-
-@cli.command()
-def flush():
-    """ Deletes everything from the database. """
-    logging.info("Flushing the database")
-    session = db_session()
-    no_of_rows = session.query(MetasysObject).delete()
-    logging.info(f"Deleted {no_of_rows} objects from {MetasysObject.__tablename__}")
 
 
 @cli.command()
@@ -508,12 +490,22 @@ def count_object_types():
 @click.option('--item-prefix', type=click.STRING,
               help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
 @click.option('--real-estate', type=click.STRING,
-              help='Upload a realestate to Bas. Can be "kjorbo" for those buildings.')
+              help='Upload a realestate to Bas. Can be "kjorbo" for those buildings.'
+              'Supply a item prefix like GP-SXD9E-113: for this to work.')
 def push(item_prefix: str, real_estate: str):
     """Push cralwer data to the cloud."""
     dbsess = db_session()
 
-    push_objects_to_bas(dbsess, 0.0, item_prefix, real_estate)
+    inverted_building_map = {}
+    # Push a whole bunch of buildings that make up a real estate...
+    if real_estate:
+        # Invert the building map so we can get all ID's that make up a real estate
+        for k, v in BUILDING_MAP.items():
+            inverted_building_map[v] = inverted_building_map.get(v, []) + [k]
+        for real_estate_item_prefix in inverted_building_map[real_estate]:
+            push_objects_to_bas(dbsess, 0.0, item_prefix + real_estate_item_prefix)
+    else:
+        push_objects_to_bas(dbsess, 0.0, item_prefix)
 
 
 @cli.command()
