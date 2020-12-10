@@ -26,7 +26,7 @@ from auth.metasysbearer import BearerToken
 from auth.entrasso import EntraSSOToken
 from model.bas import Bas
 
-from .buildingmap import BUILDING_MAP
+from metadata.buildingmap import BUILDING_MAP
 # Constants:
 
 REQUESTS_TIMEOUT = 30.0  # 30 second timeout on the requests sent.
@@ -108,7 +108,7 @@ def validate_metasys_object(response: str):
     Throws ValueError upon failure. The JSON parser might also throw errors.
     """
 
-    j = json(response)
+    j = json.loads(response)
     if not 'item' in j:
         raise ValueError('No item in reponse')
     if 'message' in j:
@@ -255,8 +255,11 @@ def _metasysid_to_real_estate(metasysid: str) -> str:
         rx = re.compile('^([^:]+):([^-]+)')
         sd, building = rx.findall(metasysid)[0]
     except Exception as e:
-        logging.error(f"Could not make sense of {metasysid}")
+        logging.error(f"_metasysid_to_real_estate: Could not make sense of {metasysid}")
         raise ValueError("Regular expression error") from e
+    if not building in BUILDING_MAP:
+        logging.error(f"Can't find {building} in BUILDING_MAP - please update.")
+        return 'ukjent'
     return BUILDING_MAP[building]
 
 
