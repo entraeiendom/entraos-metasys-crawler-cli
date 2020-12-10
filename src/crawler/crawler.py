@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 # Local modules. Fix the somewhat braindead import path...
 sys.path.insert(0, os.path.realpath(os.path.dirname(__file__)))
 
-from db.models import MetasysObject, MetasysNetworkDevice, EnumSet, Base
+from db.models import MetasysObject, EnumSet, Base
 from db.base import get_dsn
 from auth.metasysbearer import BearerToken
 from auth.entrasso import EntraSSOToken
@@ -141,7 +141,6 @@ def enrich_single_thing(base_url: str, bearer: BearerToken, item_object: Metasys
 
 # This is the deep crawl. Might wanna try to cut down on the number of arguments.
 def enrich_things(session: sqlalchemy.orm.session.Session,
-                  source_class: Base,
                   base_url: str,
                   bearer: BearerToken,
                   delay: float,
@@ -154,18 +153,19 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
     ATM we can query both the Objects and the Network Device tables. It needs a itemReference if
     we are to do filtering."""
 
-    # We could perhaps  check source_class here, but that isn't pythonic. 🦆 ftw!
 
     if item_prefix:
-        if refresh:
-            query = session.query(source_class).filter(source_class.itemReference.like(item_prefix + '%'))
+        if refresh:   # Disregard successes. Fetch new data:
+            query = session.query(MetasysObject).filter(MetasysObject.itemReference.like(item_prefix + '%'))
         else:
-            query = session.query(source_class).filter(and_(
-                source_class.itemReference.like(item_prefix + '%'),
-                source_class.successes == 0
+            # Take successes into account.
+            query = session.query(MetasysObject).filter(and_(
+                MetasysObject.itemReference.like(item_prefix + '%'),
+                MetasysObject.successes == 0
             ))
     else:
-        query = session.query(source_class)
+        # Just fetch everything.
+        query = session.query(MetasysObject)
 
     item_objects = query.all()
 
@@ -180,55 +180,11 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
         time.sleep(delay)
 
 
-def insert_network_device_from_list(session, item):
-    """ Insert an network device into the database if it doesn't exists. """
-    obj_id = item["id"]
 
-    existing_item = session.query(MetasysNetworkDevice).filter_by(id=obj_id).first()
-    if existing_item and existing_item.discovered:
-        logging.info(f"Ignoring {obj_id}")
-        return
-
-    parent_url = item["parentUrl"]
-    if parent_url:
-        parent_id = get_uuid_from_url(item["parentUrl"])
-    else:
-        parent_id = None
-
-    logging.info(f"Inserting {obj_id}")
-    session.add(MetasysNetworkDevice(id=obj_id,
-                                     parentId=parent_id,
-                                     itemReference=item["itemReference"],
-                                     name=item["name"],
-                                     discovered=datetime.now(timezone.utc)
-                                     ))
-    session.commit()
-
-
-def get_network_devices(session: sqlalchemy.orm.session.Session,
-                        base_url: str,
-                        bearer: BearerToken,
-                        delay: float):
-    """ Get the list of objects from Metasys and store them in the database."""
-    page = 1
-    while True:
-        resp = requests.get(base_url +
-                            f"/networkDevices?page={page}&pageSize=100&sort=name",
-                            auth=bearer, timeout=REQUESTS_TIMEOUT)
-        json_response = resp.json()
-        items = json_response["items"]
-        logging.info(f"Working on page ({page} - {len(items)} items")
-        for item in json_response["items"]:
-            insert_network_device_from_list(session, item)
-        logging.info(f"Page({page}) complete.")
-        page = page + 1
-        if json_response["next"] is None:  # the last page has a none link to next.
-            break
-        time.sleep(delay)
 
 
 def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start: int, finish: int):
-    """ Used to list counts of different object types in the API"""
+    """ Used to list counts of different object types in the API. Used during exploration. """
     logging.info(f"Starting count {start} --> {finish} with {delay}s delay on {base_url}")
     logging.info("We ignore types with 0 entries so it'll take some time before you see output.")
     print('type,count', flush=True)
@@ -391,6 +347,7 @@ def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.ses
     """
     page = 1
     while True:
+        logging.info(f'Getting enumset {enumset}')
         resp = requests.get(base_url + f'/enumSets/{enumset}/members?page={page}&pageSize=1000',
                             auth=bearer, timeout=REQUESTS_TIMEOUT)
         resp.raise_for_status()
@@ -471,22 +428,14 @@ def objects(object_type):
               help='itemReference prefix ie something like "GP-SXD9E-113:SOKP22"')
 @click.option('--refresh', type=click.BOOL,
               help="The crawler won't refresh existing data unless told to", default=False)
-@click.option('--source', required=True,
-              type=click.Choice(['objects', 'network-devices'],
-                                case_sensitive=False), default='objects',
-              help='Should we scan objects (default) or network objects')
-def deep(item_prefix, source, refresh):
+def deep(item_prefix,  refresh):
     """Do a deep crawl fetching every object taking the prefix into account. """
     base_url = os.environ['METASYS_BASEURL']
     username = os.environ['METASYS_USERNAME']
     password = os.environ['METASYS_PASSWORD']
     bearer = BearerToken(base_url, username, password)
     session = db_session()
-    if source == 'objects':
-        source_class = MetasysObject
-    else:
-        source_class = MetasysNetworkDevice
-    enrich_things(session, source_class, base_url, bearer, 2.0, refresh, item_prefix)
+    enrich_things(session, base_url, bearer, 2.0, refresh, item_prefix)
 
 
 @cli.command()
@@ -521,7 +470,7 @@ def count_object_types():
               help='Upload a realestate to Bas. Can be "kjorbo" for those buildings.'
                    'Supply a item prefix like GP-SXD9E-113: for this to work.')
 def push(item_prefix: str, real_estate: str):
-    """Push cralwer data to the cloud."""
+    """Push cralwer data to the bas API in the cloud."""
     dbsess = db_session()
 
     inverted_building_map = {}
@@ -537,15 +486,20 @@ def push(item_prefix: str, real_estate: str):
 
 
 @cli.command()
-@click.argument('enumset', type=click.INT, nargs=1)
-def get_enumset(enumset: int):
+@click.option('--enumset', type=click.INT,
+              help='grab a specific enumset. Default is to grab 507 and 508.')
+def get_enumset(enumset: int = None):
     """Grabs an enumset from metasys and populates the local database with it."""
     base_url = os.environ['METASYS_BASEURL']
     username = os.environ['METASYS_USERNAME']
     password = os.environ['METASYS_PASSWORD']
     bearer = BearerToken(base_url, username, password)
     dbsess = db_session()
-    grab_enumsets(base_url, bearer, dbsess, enumset, 1.0)
+    if enumset:
+        grab_enumsets(base_url, bearer, dbsess, enumset, 1.0)
+    else:
+        grab_enumsets(base_url, bearer, dbsess, 507, 1.0)
+        grab_enumsets(base_url, bearer, dbsess, 508, 1.0)
 
 
 # We typically won't be invoked like this, but if we do we set debug=True
