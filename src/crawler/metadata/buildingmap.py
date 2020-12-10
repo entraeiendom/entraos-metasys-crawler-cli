@@ -1,3 +1,6 @@
+# Map of buildings from metasys to Real Estates.
+# Used when we push data to Bas
+
 BUILDING_MAP = {
     'SOKP16': 'kjorbo',
     'SOKP14': 'kjorbo',
