@@ -90,7 +90,7 @@ poetry run crawler flush
 
 Pushing data into BAS
 ```
-poetry run crawler --item-prefix GP-SXD9E-113:SOKP16
+poetry run crawler push --item-prefix GP-SXD9E-113:SOKP16
 ```
 
 ### Help?
