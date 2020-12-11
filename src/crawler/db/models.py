@@ -20,7 +20,6 @@ class MetasysObject(Base):  # pylint: disable=too-few-public-methods
     lastError = Column(DateTime, nullable=True)
     successes = Column(Integer, nullable=False, default=0)
     errors = Column(Integer, nullable=False, default=0)
-    response = Column(Text, nullable=True)
 
     # Included for convenience:
     name = Column(String, nullable=True)
