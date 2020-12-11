@@ -6,7 +6,7 @@ import datetime
 
 import pytest
 
-from crawler.metasysauth.bearer import BearerToken  # pylint: disable=wrong-import-position
+from crawler.auth.metasysbearer import BearerToken  # pylint: disable=wrong-import-position
 
 
 def pytest_sessionstart(session):

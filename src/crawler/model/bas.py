@@ -1,11 +1,8 @@
 """ Dataclass object for the BAS API"""     # pylint: disable=invalid-name
 
-import uuid
-from dataclasses import dataclass
 from datetime import datetime
 
 
-@dataclass
 class Bas:
     id: str
     realEstate: str
@@ -21,3 +18,7 @@ class Bas:
     itemReference: str
     tfm: str
     description: str
+
+    def __init__(self, **kwargs):
+        # Generic dataclass-like constructor
+        self.__dict__.update(kwargs)

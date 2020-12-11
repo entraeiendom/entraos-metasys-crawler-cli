@@ -55,7 +55,7 @@ def test_enrich_objects(requests_mock, baseurl, logged_in_bearer):
                                )
     mockdb_session = MagicMock()
     mockdb_session.query.return_value.all.return_value = [return_obj]   # This breaks if we filter the query....
-    crawler.enrich_things(mockdb_session, MetasysObject, baseurl, logged_in_bearer, 0.0, True)
+    crawler.enrich_things(mockdb_session, baseurl, logged_in_bearer, 0.0, True)
     # assert mockdb_session.
     # I would like to assert more on the db mock, but it becomes very fragile.
     # Specifically, I'd like to check that the object I supplied gets committed to the database.
