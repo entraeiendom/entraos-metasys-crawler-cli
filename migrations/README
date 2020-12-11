@@ -1,4 +1,7 @@
 Generic single-database configuration.
 
 
-In order to
+This is where we do database migrations. Things to note:
+ - sqlite doesn't support dropping columns (wtf?) directly so we use "batch mode" when doing this.
+ if this causes errors see https://blog.miguelgrinberg.com/post/fixing-alter-table-errors-with-flask-migrate-and-sqlite
+
