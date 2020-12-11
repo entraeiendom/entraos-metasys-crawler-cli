@@ -74,7 +74,7 @@ And the crawler will limit the enrichment to items with that prefix (building KP
 
 Pushing data into BAS
 ```
-poetry run crawler push 
+poetry run crawler push --item-prefix GP-SXD9E-113:SOKP16
 ```
 push also accepts an item prefix like `--item-prefix GP-SXD9E-113:SOKP16` or 
 even a logical real estate - `--real-estate kjorbo`. This last one relies on 
