@@ -32,12 +32,15 @@ class EntraSSOToken(requests.auth.AuthBase):
         """ This is the interface to the requests library.
         It validates the token and injects a auth header"""
         now = int(time.time())
-        # Avoid recursion when using this object to refresh:
+        # Avoid recursion when using this object to refresh
+        # Be careful not to end up calling yourself.
+
+        if not self.token:
+            self.login()
         delta = self.expires - now
         if delta < 120:
             logging.info("EntraSSO token is expiring in less than 120 seconds. Deleting token.")
             self.token = None
-        if not self.token:
             self.login()
         r.headers["authorization"] = "Bearer " + self.token
         return r
