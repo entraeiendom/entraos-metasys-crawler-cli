@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import time
+import traceback
 import uuid
 from datetime import timezone, datetime
 import logging
@@ -287,7 +288,8 @@ def push_reponse_to_bas(session: sqlalchemy.orm.session.Session,
                              json=bas.asDict(), timeout=REQUESTS_TIMEOUT,
                              auth=entrasso)
     except Exception as e:
-        logging.error(f'Unknown error while creating/sending requst to Base: {e}')
+        logging.error(f'Unknown error while creating/sending request to Bas: {e}')
+        traceback.print_exc()
         sys.exit(1)
     # Bail on error.
     if resp.status_code >= 400:
@@ -400,15 +402,15 @@ def deep(item_prefix, refresh):
     bearer = BearerToken(metasys_baseurl, metasys_username, metasys_password)
 
     # And ditto for the entrasso object:
-    entrasso_auth_url = os.environ['ENTRASSO_AUTH_URL']
-    entraos_bas_appid = os.environ['ENTRAOS_BAS_APPID']
+    entrasso_auth_url = os.environ['ENTRAOS_SSO_URL']
     entraos_bas_appname = os.environ['ENTRAOS_BAS_APPNAME']
     entraos_bas_appid = os.environ['ENTRAOS_BAS_APPID']
+    entraos_bas_secret = os.environ['ENTRAOS_BAS_SECRET']
 
     entrasso = EntraSSOToken(url=entrasso_auth_url,
                              appid=entraos_bas_appid,
                              appname=entraos_bas_appname,
-                             secret=entraos_bas_appname
+                             secret=entraos_bas_secret
                              )
     session = db_session()
     enrich_things(session, metasys_baseurl, bearer, entrasso, 2.0, refresh, item_prefix)
