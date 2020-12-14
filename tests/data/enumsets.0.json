@@ -1,0 +1,68 @@
+{
+    "total": 812,
+    "next": null,
+    "previous": null,
+    "items": [
+        {
+            "id": 894,
+            "description": "3. parts Klasse Feltenhet",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/894",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        },
+        {
+            "id": 330,
+            "description": "ABH",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/330",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        },
+        {
+            "id": 563,
+            "description": "ABH, opprinnelig",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/563",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        },
+        {
+            "id": 135,
+            "description": "Abonnementserver",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/135",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        },
+        {
+            "id": 661,
+            "description": "Abonnentklient",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/661",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        },
+        {
+            "id": 36,
+            "description": "Adgang sone",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/36",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        },
+        {
+            "id": 373,
+            "description": "Adgangsgruppe",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/373",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        },
+        {
+            "id": 364,
+            "description": "Adgangskontroll",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/364",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        },
+        {
+            "id": 749,
+            "description": "Adgangskontrolladministrator",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/749",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        },
+        {
+            "id": 368,
+            "description": "Adgangsprofil",
+            "self": "https://192.168.242.15/api/v2/enumSets/508/members/368",
+            "setUrl": "https://192.168.242.15/api/v2/enumSets/508"
+        }
+    ],
+    "self": "https://192.168.242.15/api/v2/enumSets/508/members?page=1&pageSize=1000"
+}

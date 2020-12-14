@@ -5,7 +5,7 @@
     "items": [
         {
             "id": "3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE",
-            "itemReference": "SD001:BA76-NAE99/Powermeter.floor01",
+            "itemReference": "GP-SXD9E-113:SOKB16-NAE99/Powermeter.floor01",
             "name": "Powermeter.floor01",
             "typeUrl": "https://192.168.242.15/api/v2/enumSets/508/members/165",
             "self": "https://192.168.242.15/api/v2/objects/3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE",
@@ -19,7 +19,7 @@
         },
         {
             "id": "B381E84B-F138-4809-833A-72130FAE2BA9",
-            "itemReference": "SD001:BA76-NAE99/Powermeter.floor02",
+            "itemReference": "GP-SXD9E-113:SOKB16-NAE99/Powermeter.floor02",
             "name": "Powermeter.floor02",
             "typeUrl": "https://192.168.242.15/api/v2/enumSets/508/members/165",
             "self": "https://192.168.242.15/api/v2/objects/B381E84B-F138-4809-833A-72130FAE2BA9",
@@ -33,7 +33,7 @@
         },
         {
             "id": "5115BAEE-5473-40ED-8DDA-1C35EB76C6E3",
-            "itemReference": "SD001:BA76-NAE99/Powermeter.floor03",
+            "itemReference": "GP-SXD9E-113:SOKB16-NAE99/Powermeter.floor03",
             "name": "Powermeter.floor03",
             "typeUrl": "https://192.168.242.15/api/v2/enumSets/508/members/165",
             "self": "https://192.168.242.15/api/v2/objects/5115BAEE-5473-40ED-8DDA-1C35EB76C6E3",

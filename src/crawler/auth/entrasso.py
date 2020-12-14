@@ -31,7 +31,6 @@ class EntraSSOToken(requests.auth.AuthBase):
         """Gets the LOGIN
 
         Fires of a login request. Stores the token. Ignores expiration."""
-        logging.info(f"Logging in.")
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
         }
@@ -42,6 +41,7 @@ class EntraSSOToken(requests.auth.AuthBase):
         data = {
             'applicationcredential': f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?> <applicationcredential> <params> <applicationID>{appid}</applicationID> <applicationName>{appname}</applicationName> <applicationSecret>{secret}</applicationSecret> </params> </applicationcredential>'
         }
+        logging.info(f"EntraSSO: Logging in as appid: {appname} with id {appid}")
 
         response = requests.post(self.auth_url,
                                  headers=headers, data=data)

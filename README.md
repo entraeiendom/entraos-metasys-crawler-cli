@@ -60,7 +60,7 @@ The crawler runs in two phases. First it collects the list of objects.
 poetry run crawler objects
 ```
 
-Once it completes you can run the more intrusive crawl:
+Once it completes you can run the more intrusive crawl. This will push data to Bas as you go along.
 ```
 poetry run crawler deep
 ```
@@ -70,15 +70,6 @@ based on the itemReference identifier. Do this:
 poetry run crawler deep --item-prefix GP-SXD9E-113:SOKP22-NAE4/
 ```
 And the crawler will limit the enrichment to items with that prefix (building KP22, substation NAE4).
-
-
-Pushing data into BAS
-```
-poetry run crawler push --item-prefix GP-SXD9E-113:SOKP16
-```
-push also accepts an item prefix like `--item-prefix GP-SXD9E-113:SOKP16` or 
-even a logical real estate - `--real-estate kjorbo`. This last one relies on 
-src/metadata/buildingmap.py to map Metasys real estate to something logical.
 
 ### Help?
 ```shell script

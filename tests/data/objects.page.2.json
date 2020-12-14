@@ -5,7 +5,7 @@
     "items": [
         {
             "id": "5E43C541-365B-452B-8121-4FFCA82FF09C",
-            "itemReference": "SD001:BA76-NAE99/Powermeter.floor04",
+            "itemReference": "GP-SXD9E-113:SOKB16-NAE99/Powermeter.floor04",
             "name": "Powermeter.floor04",
             "typeUrl": "https://192.168.242.15/api/v2/enumSets/508/members/165",
             "self": "https://192.168.242.15/api/v2/objects/5E43C541-365B-452B-8121-4FFCA82FF09C",

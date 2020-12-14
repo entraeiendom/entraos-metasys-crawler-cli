@@ -33,7 +33,7 @@ def password():
 
 
 @pytest.fixture()
-def baseurl():
+def metasys_baseurl():
     return 'http://localhost/api/v2'
 
 
@@ -43,16 +43,16 @@ def generate_token():
 
 
 @pytest.fixture()
-def bearer(username, password, baseurl):
+def bearer(username, password, metasys_baseurl):
     """ Creates a fresh bearer object. No token created at this point. """
-    bearer_object = BearerToken(baseurl, username, password)
+    bearer_object = BearerToken(metasys_baseurl, username, password)
     return bearer_object
 
 
 @pytest.fixture()
-def logged_in_bearer(requests_mock, baseurl, bearer, generate_token):
+def logged_in_bearer(requests_mock, metasys_baseurl, bearer, generate_token):
     now_plus_one_hour = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
-    requests_mock.post(baseurl + '/login',
+    requests_mock.post(metasys_baseurl + '/login',
                        json={'accessToken': generate_token,
                              'expires': now_plus_one_hour.isoformat()
                              })

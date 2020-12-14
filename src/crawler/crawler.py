@@ -118,7 +118,8 @@ def validate_metasys_object(response: str):
         raise ValueError('No item in reponse.')
 
 
-def enrich_single_thing(base_url: str,
+def enrich_single_thing(session: sqlalchemy.orm.session.Session,
+                        base_url: str,
                         metasys_bearer: BearerToken,
                         item_object: MetasysObject,
                         entrasso: EntraSSOToken
@@ -134,7 +135,7 @@ def enrich_single_thing(base_url: str,
                             auth=metasys_bearer, timeout=REQUESTS_TIMEOUT)
         validate_metasys_object(resp.text)  # Validate the response. Throws exceptions.
         item_object.lastCrawl = datetime.now(timezone.utc)
-        push_reponse_to_bas(resp.text, item_object, entrasso)  # Push to Bas. Throws exceptions.
+        push_reponse_to_bas(session, resp.text, item_object, entrasso)  # Push to Bas. Throws exceptions.
         item_object.successes += 1
         item_object.lastSync = datetime.now(tz=timezone.utc)
 
@@ -177,7 +178,7 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
     for item_object in item_objects:
         objects_crawled = objects_crawled + 1
         logging.info(f"Enriching object {item_object.id} - {item_object.name} ({objects_crawled}/{total_objects})")
-        enrich_single_thing(base_url, bearer, item_object, entrasso)
+        enrich_single_thing(session, base_url, bearer, item_object, entrasso)
         # Note that item_object has mutated here. error/success and lastSync has updated.
         # So we need to commit.
         session.commit()  # Commit after each object. Might throw.
@@ -230,12 +231,11 @@ def _json_converter(whatever) -> str:
 
 
 @lru_cache(maxsize=256)
-def get_type_description(object_type: int) -> str:
+def get_type_description(session: sqlalchemy.orm.session.Session, object_type: int) -> str:
     """Returns the string representation of the object type. Note that
     functools will cache the result of this so we don't have to hit
     the database for every lookup. """
-    dbsess = db_session()
-    enumset = dbsess.query(EnumSet).filter_by(id=object_type).first()
+    enumset = session.query(EnumSet).filter_by(id=object_type).first()
     if not enumset.description:
         # Note that this will only fire off once per input as the result is cached.
         logging.error(f"No description found for type {object_type}")
@@ -248,12 +248,13 @@ def b64_encode_response(metasysresp: str) -> str:
     return base64.b64encode(metasysresp.encode('utf8')).decode('utf8')
 
 
-def push_reponse_to_bas(metasysresp: str, metadata: MetasysObject, entrasso: EntraSSOToken):
+def push_reponse_to_bas(session: sqlalchemy.orm.session.Session,
+                        metasysresp: str, metadata: MetasysObject, entrasso: EntraSSOToken):
     """ Push a single Response from the Metasys API to the Bas API. """
     j = json.loads(metasysresp)
     # Build the DTO useing model (model/bas.py)
     try:
-        base_url = os.getenv('ENTRAOS_BAS_BASEURL')
+        base_url = os.environ['ENTRAOS_BAS_BASEURL']
     except KeyError:
         logging.error("Environment variable ENTRAOS_BAS_BASEURL is not set")
         sys.exit(1)
@@ -262,7 +263,7 @@ def push_reponse_to_bas(metasysresp: str, metadata: MetasysObject, entrasso: Ent
             id=metadata.id,  # id - get from item or metadata
             realEstate=_metasysid_to_real_estate(metadata.itemReference),  # generate from building
             parentId=metadata.parentId,  # from metadata or parse parentUrl
-            type=get_type_description(metadata.type),  # generate from metadata type - use regex / BUILDINGMAP
+            type=get_type_description(session, metadata.type),  # generate from metadata type - Looks up enumtype.
             discovered=_json_converter(metadata.discovered),  # datetime        # metadata
             lastCrawl=_json_converter(metadata.lastCrawl),  # metadata
             lastError=_json_converter(metadata.lastError),  # metadata
@@ -283,9 +284,9 @@ def push_reponse_to_bas(metasysresp: str, metadata: MetasysObject, entrasso: Ent
     json_data = bas.asDict()
     try:
         resp = requests.post(url,
-                         headers={'Content-Type': 'application/json'},
-                         json=bas.asDict(), timeout=REQUESTS_TIMEOUT,
-                         auth=entrasso)
+                             headers={'Content-Type': 'application/json'},
+                             json=bas.asDict(), timeout=REQUESTS_TIMEOUT,
+                             auth=entrasso)
     except Exception as e:
         logging.error(f'Unknown error while creating/sending requst to Base: {e}')
         sys.exit(1)
@@ -296,12 +297,16 @@ def push_reponse_to_bas(metasysresp: str, metadata: MetasysObject, entrasso: Ent
         sys.exit(1)
     logging.info("Object pushed to Bas")
 
-def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.session.Session,
+
+def grab_enumsets(base_url: str,
+                  bearer: BearerToken,
+                  dbsess: sqlalchemy.orm.session.Session,
                   enumset: int, delay: float) -> None:
     """This function gets invoked when running crawler enumset and it grabs the enumsets.
     These are used to translate the type field into a somewhat meaningful string.
     """
     page = 1
+    count = 0
     while True:
         logging.info(f'Getting enumset {enumset}')
         resp = requests.get(base_url + f'/enumSets/{enumset}/members?page={page}&pageSize=1000',
@@ -313,8 +318,10 @@ def grab_enumsets(base_url: str, bearer: BearerToken, dbsess: sqlalchemy.orm.ses
             enumset_id = item['id']
             description = item['description']
             db_item = EnumSet(id=enumset_id, description=description or "", enumset=enumset)
+            logging.debug(f"Adding enumset ID {enumset_id}, description: {description} in set {enumset}")
             dbsess.merge(db_item)
             dbsess.commit()
+            count = count + 1
 
         page = page + 1
         if json_response["next"] is None:  # the last page has a none link to next.
