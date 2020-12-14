@@ -4,24 +4,39 @@ Python Requests driver for auth against some internal XML-based SSO with Bearers
 import logging
 import os
 import xml.etree.ElementTree as ET
+import time
 
 import requests
 
 
 class EntraSSOToken(requests.auth.AuthBase):
-    """ Auth driver + service class for metasys. Used by the requests lib. """
+    """ Auth driver + service class for EntraSSO. Used by the requests lib when accessing services
+    protected by EntraSSO. """
     auth_url: str = None
     token: str = None
+    expires: int = None
+    appid: str = None
+    appname: str = None
+    secret: str = None
 
-    def __init__(self):
+
+    def __init__(self, url: str, appid: str, appname: str, secret: str):
         """ Initialize the object with base_url, username and password. """
-        self.auth_url = os.environ['ENTRAOS_SSO_URL']
+        self.auth_url = url
+        self.appid = appid
+        self.appname = appname
+        self.secret = secret
+
 
     def __call__(self, r):
         """ This is the interface to the requests library.
         It validates the token and injects a auth header"""
-
+        now = int(time.time())
         # Avoid recursion when using this object to refresh:
+        delta = self.expires - now
+        if delta < 120:
+            logging.info("EntraSSO token is expiring in less than 120 seconds. Deleting token.")
+            self.token = None
         if not self.token:
             self.login()
         r.headers["authorization"] = "Bearer " + self.token
@@ -30,18 +45,16 @@ class EntraSSOToken(requests.auth.AuthBase):
     def login(self):
         """Gets the LOGIN
 
-        Fires of a login request. Stores the token. Ignores expiration."""
+        Fires of a login request. Stores the token and expiration."""
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
         }
-        appid = os.environ['ENTRAOS_BAS_APPID']      # Will raise if not found.
-        appname = os.environ['ENTRAOS_BAS_APPNAME']
-        secret = os.environ['ENTRAOS_BAS_SECRET']
 
         data = {
-            'applicationcredential': f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?> <applicationcredential> <params> <applicationID>{appid}</applicationID> <applicationName>{appname}</applicationName> <applicationSecret>{secret}</applicationSecret> </params> </applicationcredential>'
+            'applicationcredential':
+                f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?> <applicationcredential> <params> <applicationID>{self.appid}</applicationID> <applicationName>{self.appname}</applicationName> <applicationSecret>{self.secret}</applicationSecret> </params> </applicationcredential>'
         }
-        logging.info(f"EntraSSO: Logging in as appid: {appname} with id {appid}")
+        logging.info(f"EntraSSO: Logging in as appid: {self.appname} with id {self.appid}")
 
         response = requests.post(self.auth_url,
                                  headers=headers, data=data)
@@ -50,6 +63,5 @@ class EntraSSOToken(requests.auth.AuthBase):
         root = ET.fromstring(xml_response)
         token = root.find('params').find('applicationtokenID').text
         self.token = token
-
-
-
+        expires = int(root.find('params').find('expires').text)
+        self.expires = expires

@@ -152,7 +152,8 @@ def enrich_single_thing(session: sqlalchemy.orm.session.Session,
 # This is the deep crawl. Might wanna try to cut down on the number of arguments.
 def enrich_things(session: sqlalchemy.orm.session.Session,
                   base_url: str,
-                  bearer: BearerToken,
+                  metasys_bearer: BearerToken,
+                  entrasso_bearer: EntraSSOToken,
                   delay: float,
                   refresh: bool,
                   item_prefix: str = None) -> None:
@@ -170,15 +171,12 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
 
     item_objects = query.all()
 
-    entrasso = EntraSSOToken()
-    entrasso.login()  # fetches info from environment variables
-
     total_objects = len(item_objects)
     objects_crawled = 0
     for item_object in item_objects:
         objects_crawled = objects_crawled + 1
         logging.info(f"Enriching object {item_object.id} - {item_object.name} ({objects_crawled}/{total_objects})")
-        enrich_single_thing(session, base_url, bearer, item_object, entrasso)
+        enrich_single_thing(session, base_url, metasys_bearer, item_object, entrasso_bearer)
         # Note that item_object has mutated here. error/success and lastSync has updated.
         # So we need to commit.
         session.commit()  # Commit after each object. Might throw.
@@ -249,7 +247,8 @@ def b64_encode_response(metasysresp: str) -> str:
 
 
 def push_reponse_to_bas(session: sqlalchemy.orm.session.Session,
-                        metasysresp: str, metadata: MetasysObject, entrasso: EntraSSOToken):
+                        metasysresp: str, metadata: MetasysObject,
+                        entrasso: EntraSSOToken):
     """ Push a single Response from the Metasys API to the Bas API. """
     j = json.loads(metasysresp)
     # Build the DTO useing model (model/bas.py)
@@ -393,12 +392,26 @@ def objects(object_type):
               help="The crawler won't refresh existing data unless told to", default=False)
 def deep(item_prefix, refresh):
     """Do a deep crawl fetching every object taking the prefix into account. """
-    base_url = os.environ['METASYS_BASEURL']
-    username = os.environ['METASYS_USERNAME']
-    password = os.environ['METASYS_PASSWORD']
-    bearer = BearerToken(base_url, username, password)
+
+    # Setup the metasys auth object. This will raise exceptions if it fails.
+    metasys_baseurl = os.environ['METASYS_BASEURL']
+    metasys_username = os.environ['METASYS_USERNAME']
+    metasys_password = os.environ['METASYS_PASSWORD']
+    bearer = BearerToken(metasys_baseurl, metasys_username, metasys_password)
+
+    # And ditto for the entrasso object:
+    entrasso_auth_url = os.environ['ENTRASSO_AUTH_URL']
+    entraos_bas_appid = os.environ['ENTRAOS_BAS_APPID']
+    entraos_bas_appname = os.environ['ENTRAOS_BAS_APPNAME']
+    entraos_bas_appid = os.environ['ENTRAOS_BAS_APPID']
+
+    entrasso = EntraSSOToken(url=entrasso_auth_url,
+                             appid=entraos_bas_appid,
+                             appname=entraos_bas_appname,
+                             secret=entraos_bas_appname
+                             )
     session = db_session()
-    enrich_things(session, base_url, bearer, 2.0, refresh, item_prefix)
+    enrich_things(session, metasys_baseurl, bearer, entrasso, 2.0, refresh, item_prefix)
 
 
 @cli.command()

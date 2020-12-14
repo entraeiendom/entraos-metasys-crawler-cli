@@ -28,7 +28,7 @@ def get_path(file) -> str:
     return os.path.join(os.path.dirname(__file__), file)
 
 
-def test_get_objects(requests_mock, metasys_baseurl, logged_in_bearer):
+def test_get_objects(requests_mock, metasys_baseurl, logged_in_metasys_bearer):
     """Test the get_objects function. Mocks the request as well as the database."""
     with open(get_path('data/objects.page.1.json')) as fh:
         json_text1 = fh.read()
@@ -41,61 +41,62 @@ def test_get_objects(requests_mock, metasys_baseurl, logged_in_bearer):
     # Make sure that when the crawler queries for existing objects we make sure there are none.
     # Perhaps we wanna write another test with existing objects that then get ignored.
     mockdb_session.query.return_value.filter_by.return_value.first.return_value = None
-    crawler.get_objects(mockdb_session, metasys_baseurl, logged_in_bearer, 165, 0.0)
+    crawler.get_objects(mockdb_session, metasys_baseurl, logged_in_metasys_bearer, 165, 0.0)
     assert mockdb_session.add.call_count == 6  # We should have done 6 adds.
     assert mockdb_session.commit.call_count == 6
     assert mockdb_session.add.call_args_list[0][0][0].id == '3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE'
     assert mockdb_session.add.call_args_list[5][0][0].id == '7B599BFB-3A4A-4F75-85E4-D746FA4EA6E0'
 
 
-def test_enrich_objects(requests_mock, metasys_baseurl, logged_in_bearer, mocker):
+def test_enrich_objects(requests_mock,
+                        metasys_baseurl,
+                        logged_in_metasys_bearer,
+                        mocker,
+                        logged_in_entrasso_bearer,
+                        bas_target_url
+                        ):
     """Test the enrich objects function. Mocks the request and the database."""
     with open(get_path('data/object.0.json')) as fh:
         json_text = fh.read()
     j_dict = json.loads(json_text)
     id = j_dict["item"]["id"]
 
-    # Set up metasys mock
+    # Set up metasys mock for the request that the crawler will do to metasys.
+    # base_url + f"/objects/{item_object.id}" --> 'http://localhost/api/v2/objects/3C30ACE2-9AD2-4C14-BB3E-480B99A3E9EE'
     requests_mock.get(metasys_baseurl + f'/objects/{id}', complete_qs=True, text=json_text)
-
-    # EntraSSO mock.
-    requests_mock.post(os.environ["ENTRAOS_SSO_URL"],
-                       headers={'Content-Type': 'application/xml'},
-                       text="""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<applicationtoken>
-   <params>
-       <applicationtokenID>14c670194462012d18facf00e2cc296f</applicationtokenID>
-       <applicationid>11</applicationid>
-       <applicationname>SSOLoginService</applicationname>       
- <expires>1291813232877</expires>
- </params>
- </applicationtoken>
-""")
-
-    # Set up the Bas mock.
-    requests_mock.post(
-        os.environ['ENTRAOS_BAS_BASEURL'] + '/metadata/bas/realestate/' + 'kjorbo',
-        headers={'Content-Type': 'application/json'},
-        text='{ "message": "object created"}', # Todo: Not sure how the response looks.
-    )
 
     # Mock the database..
     return_obj = MetasysObject(id=id,
                                name="Energi_kWh",
                                itemReference="GP-SXD9E-113:SOKB16--NAE99/Powermeter.floor01",
                                successes=0,
-                               discovered="2020-12-11 08:24:43.031630",
-                               lastCrawl="2020-12-11 08:24:43.031630",
+                               discovered=datetime.now(timezone.utc),
+                               lastCrawl=datetime.now(timezone.utc),
                                lastError=None,
                                type=129,
                                )
-    mockdb_session = MagicMock()
+    mockdb_session = Mock()
     mockdb_session.query.return_value.all.return_value = [return_obj]  # This breaks if we filter the query....
 
+    # Monkey patching this so we don't have to mock it.
+    # This will replace the get_type_description in the crawler to return a value
+    # without a database.
     mocker.patch('crawler.crawler.get_type_description',
                  return_value='Powerthingy'
                  )
-    crawler.enrich_things(mockdb_session, metasys_baseurl, logged_in_bearer, 0.0, True)
+
+    # Set up the mocks for the Bas API so we have somewhere to push.
+    # We do a POST to http://localhost/bas/metadata/bas/realestate/kjorbo"
+
+    requests_mock.post(bas_target_url + f'/kjorbo', complete_qs=True,
+                       headers={'Content-type': 'application/json'},
+                       text='{ "message": "Thank you for your contribution"}')
+
+
+    crawler.enrich_things(session=mockdb_session,
+                          base_url=metasys_baseurl, metasys_bearer=logged_in_metasys_bearer,
+                          entrasso_bearer=logged_in_entrasso_bearer,
+                          delay=0.0, refresh=True)
 
     # We expect one commit do be done.
 
@@ -154,7 +155,7 @@ def test_b64_encode_response():
 
 
 
-def test_grab_enumsets(requests_mock, metasys_baseurl, logged_in_bearer):
+def test_grab_enumsets(requests_mock, metasys_baseurl, logged_in_metasys_bearer):
     enumset = 508
 
     with open(get_path('data/enumsets.0.json')) as fh:
@@ -166,7 +167,7 @@ def test_grab_enumsets(requests_mock, metasys_baseurl, logged_in_bearer):
 
     # Mock up
 
-    crawler.grab_enumsets(metasys_baseurl, logged_in_bearer, mockdb_session, enumset, 0)
+    crawler.grab_enumsets(metasys_baseurl, logged_in_metasys_bearer, mockdb_session, enumset, 0)
     # We're doing 10 IDs, so 10 updates + 10 commits is 20 calls on the database.
     assert len(mockdb_session.mock_calls) == 20
 
