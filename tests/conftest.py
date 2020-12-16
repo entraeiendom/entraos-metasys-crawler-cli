@@ -70,9 +70,13 @@ def entrasso_auth_url():
     return 'http://localhost/entrasso'
 
 @pytest.fixture()
-def entrasso_bearer(entrasso_auth_url):
+def entrasso_secret():
+    return "entrasso secret"
+
+@pytest.fixture()
+def entrasso_bearer(entrasso_auth_url, entrasso_secret):
     """ Creates a fresh bearer object. No token created at this point but it should be ready to go.. """
-    bearer_object = EntraSSOToken(entrasso_auth_url, appid=666, appname='test', secret="entrasso secret")
+    bearer_object = EntraSSOToken(entrasso_auth_url, appid=666, appname='test', secret=entrasso_secret)
     return bearer_object
 
 
@@ -85,8 +89,8 @@ def logged_in_entrasso_bearer(requests_mock, entrasso_bearer, generate_token, en
 <applicationtoken>
    <params>
        <applicationtokenID>{generate_token}</applicationtokenID>
-       <applicationid>11</applicationid>
-       <applicationname>SSOLoginService</applicationname>       
+       <applicationid>666</applicationid>
+       <applicationname>Testing entrasso</applicationname>       
        <expires>{now_plus_one_hour}</expires>
  </params>
  </applicationtoken>

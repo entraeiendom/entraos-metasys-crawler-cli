@@ -1,8 +1,7 @@
 """
-Python Requests driver for auth against some internal XML-based SSO with Bearers.
+Python Requests driver for auth against some internal XML-based SSO with Bearers - EntraSSO.
  """
 import logging
-import os
 import xml.etree.ElementTree as ET
 import time
 
@@ -38,6 +37,7 @@ class EntraSSOToken(requests.auth.AuthBase):
         if not self.token:
             self.login()
         delta = self.expires - now
+        logging.debug(f"EntraSSO session time remaining: {delta}")
         if delta < 120:
             logging.info("EntraSSO token is expiring in less than 120 seconds. Deleting token.")
             self.token = None
@@ -55,7 +55,13 @@ class EntraSSOToken(requests.auth.AuthBase):
 
         data = {
             'applicationcredential':
-                f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?> <applicationcredential> <params> <applicationID>{self.appid}</applicationID> <applicationName>{self.appname}</applicationName> <applicationSecret>{self.secret}</applicationSecret> </params> </applicationcredential>'
+                f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?> 
+                <applicationcredential> 
+                <params> <applicationID>{self.appid}</applicationID> 
+                <applicationName>{self.appname}</applicationName>
+                <applicationSecret>{self.secret}</applicationSecret> 
+                </params> 
+                </applicationcredential>"""
         }
         logging.info(f"EntraSSO: Logging in as appid: {self.appname} with id {self.appid}")
 

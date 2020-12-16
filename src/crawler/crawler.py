@@ -19,6 +19,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # Local modules. Fix the somewhat braindead import path...
+# This injects the path where this file is located into the search path.
 sys.path.insert(0, os.path.realpath(os.path.dirname(__file__)))
 
 from db.models import MetasysObject, EnumSet, Base
@@ -63,7 +64,7 @@ def insert_object(session, item, object_type):
 
     existing_item = session.query(MetasysObject).filter_by(id=obj_id).first()
     if existing_item and existing_item.discovered:
-        logging.info(f"Ignoring {obj_id} as we've already discovered it.")
+        logging.debug(f"Ignoring {obj_id} as we've already discovered it.")
         return
 
     logging.info(f"Inserting {obj_id}")
@@ -136,7 +137,7 @@ def enrich_single_thing(session: sqlalchemy.orm.session.Session,
                             auth=metasys_bearer, timeout=REQUESTS_TIMEOUT)
         validate_metasys_object(resp.text)  # Validate the response. Throws exceptions.
         item_object.lastCrawl = datetime.now(timezone.utc)
-        push_reponse_to_bas(session, resp.text, item_object, entrasso)  # Push to Bas. Throws exceptions.
+        push_response_to_bas(session, resp.text, item_object, entrasso)  # Push to Bas. Throws exceptions.
         item_object.successes += 1
         item_object.lastSync = datetime.now(tz=timezone.utc)
 
@@ -148,6 +149,7 @@ def enrich_single_thing(session: sqlalchemy.orm.session.Session,
         item_object.lastError = datetime.now(timezone.utc)
         item_object.errors += 1
         logging.error(response_exception)
+        # Todo: Perhaps abort here? We don't know what happened.
 
 
 # This is the deep crawl. Might wanna try to cut down on the number of arguments.
@@ -201,7 +203,7 @@ def count_object_by_type(base_url: str, bearer: BearerToken, delay: float, start
         time.sleep(delay)
 
 
-def _metasysid_to_real_estate(metasysid: str) -> str:
+def metasysid_to_real_estate(metasysid: str) -> str:
     """Takes something like 'GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4'
     and spits out 'kjorbo' using BUILDING_MAP (dict)
 
@@ -212,10 +214,13 @@ def _metasysid_to_real_estate(metasysid: str) -> str:
     try:
         rx = re.compile('^([^:]+):([^-]+)')
         sd, building = rx.findall(metasysid)[0]
+    except IndexError as e:
+        logging.error("Regular expression did not match. This should not happen.")
+        raise IndexError from e
     except Exception as e:
-        logging.error(f"_metasysid_to_real_estate: Could not make sense of {metasysid}")
+        logging.error(f"metasysid_to_real_estate: Could not make sense of {metasysid}")
         raise ValueError("Regular expression error") from e
-    if not building in BUILDING_MAP:
+    if building not in BUILDING_MAP:
         logging.error(f"Can't find {building} in BUILDING_MAP - please update.")
         return 'ukjent'
     return BUILDING_MAP[building]
@@ -247,9 +252,10 @@ def b64_encode_response(metasysresp: str) -> str:
     return base64.b64encode(metasysresp.encode('utf8')).decode('utf8')
 
 
-def push_reponse_to_bas(session: sqlalchemy.orm.session.Session,
-                        metasysresp: str, metadata: MetasysObject,
-                        entrasso: EntraSSOToken):
+def push_response_to_bas(session: sqlalchemy.orm.session.Session,
+                         metasysresp: str,         # Response string with item.
+                         metadata: MetasysObject,  # DBO
+                         entrasso: EntraSSOToken):
     """ Push a single Response from the Metasys API to the Bas API. """
     j = json.loads(metasysresp)
     # Build the DTO useing model (model/bas.py)
@@ -261,7 +267,7 @@ def push_reponse_to_bas(session: sqlalchemy.orm.session.Session,
     try:
         bas = Bas(
             id=metadata.id,  # id - get from item or metadata
-            realEstate=_metasysid_to_real_estate(metadata.itemReference),  # generate from building
+            realEstate=metasysid_to_real_estate(metadata.itemReference),  # generate from building
             parentId=metadata.parentId,  # from metadata or parse parentUrl
             type=get_type_description(session, metadata.type),  # generate from metadata type - Looks up enumtype.
             discovered=_json_converter(metadata.discovered),  # datetime        # metadata
@@ -281,14 +287,13 @@ def push_reponse_to_bas(session: sqlalchemy.orm.session.Session,
         sys.exit(1)
     url = f"{base_url}/metadata/bas/realestate/{bas.realEstate}"
 
-    json_data = bas.asDict()
     try:
         resp = requests.post(url,
                              headers={'Content-Type': 'application/json'},
-                             json=bas.asDict(), timeout=REQUESTS_TIMEOUT,
+                             json=bas.as_dict(), timeout=REQUESTS_TIMEOUT,
                              auth=entrasso)
-    except Exception as e:
-        logging.error(f'Unknown error while creating/sending request to Bas: {e}')
+    except requests.exceptions.RequestException as e:
+        logging.error(f'Request error while creating/sending request to Bas: {e}')
         traceback.print_exc()
         sys.exit(1)
     # Bail on error.

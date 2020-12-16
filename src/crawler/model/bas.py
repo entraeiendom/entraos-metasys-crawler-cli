@@ -23,5 +23,5 @@ class Bas:
         # Generic dataclass-like constructor
         self.__dict__.update(kwargs)
 
-    def asDict(self) -> dict:
+    def as_dict(self) -> dict:
         return self.__dict__

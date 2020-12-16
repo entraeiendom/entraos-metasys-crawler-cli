@@ -16,11 +16,12 @@ def setup_module():
     os.environ["METASYS_USERNAME"] = 'testuser'
     os.environ["METASYS_PASSWORD"] = 'verysecret'
     os.environ["METASYS_BASEURL"] = 'http://localhost/api/v2'
-    os.environ["ENTRAOS_SSO_URL"] = 'http://localhost/entrasso'
+    # os.environ["ENTRAOS_SSO_URL"] = 'http://localhost/entrasso'
     os.environ["ENTRAOS_BAS_BASEURL"] = 'http://localhost/bas'
-    os.environ["ENTRAOS_BAS_APPID"] = 'test'
-    os.environ["ENTRAOS_BAS_APPNAME"] = 'test'
-    os.environ["ENTRAOS_BAS_SECRET"] = 'test'
+    # These are fixtures now. See conftest.py.
+    #os.environ["ENTRAOS_BAS_APPID"] = 'test'
+    #os.environ["ENTRAOS_BAS_APPNAME"] = 'test'
+    #os.environ["ENTRAOS_BAS_SECRET"] = 'test'
     os.environ["DSN"] = 'database://bazinga'  # This value is ignored. We mock the database. It only needs to exist.
 
 
@@ -129,7 +130,7 @@ def test_validate_metasys_object():
 
 def test__metasysid_to_real_estate():
     itemref = "GP-SXD9E-113:SOKP16-NAE4/FCB.434_121-1OU001.VAVmaks4"
-    assert crawler._metasysid_to_real_estate(itemref) == 'kjorbo'
+    assert crawler.metasysid_to_real_estate(itemref) == 'kjorbo'
 
 
 def test__json_converter():
