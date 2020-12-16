@@ -72,5 +72,5 @@ class EntraSSOToken(requests.auth.AuthBase):
         root = ET.fromstring(xml_response)
         token = root.find('params').find('applicationtokenID').text
         self.token = token
-        expires = int(root.find('params').find('expires').text)
+        expires = int(root.find('params').find('expires').text) / 1000
         self.expires = expires
