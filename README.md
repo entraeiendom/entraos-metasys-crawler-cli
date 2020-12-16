@@ -78,7 +78,9 @@ poetry run crawler --help
 
 ## How to setup your dev environment
 
-I use Pycharm for this. So I'll document that.
+I use Pycharm for this. 
+
+Remember to set the "src" folder as "source root" so Pycharm groks the imports.
 
 ### Prerequisites
  * Pycharm (or IntelliJ with the Python plugin)
