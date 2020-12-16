@@ -37,7 +37,7 @@ class EntraSSOToken(requests.auth.AuthBase):
         if not self.token:
             self.login()
         delta = self.expires - now
-        logging.debug(f"EntraSSO session time remaining: {delta}")
+        logging.debug(f"EntraSSO session time remaining: {delta} (expires: {self.expires} now: {now}")
         if delta < 120:
             logging.info("EntraSSO token is expiring in less than 120 seconds. Deleting token.")
             self.token = None
