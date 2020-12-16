@@ -183,7 +183,7 @@ def enrich_things(session: sqlalchemy.orm.session.Session,
         # Note that item_object has mutated here. error/success and lastSync has updated.
         # So we need to commit.
         session.commit()  # Commit after each object. Might throw.
-
+        logging.debug(f"Sleeping for {delay} seconds.")
         time.sleep(delay)
 
 
